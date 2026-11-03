@@ -1,0 +1,22 @@
+# Secrets: keep API keys out of git
+.env
+.env.*
+!.env.example
+
+# Uploaded documents, rendered pages, results and the SQLite database
+data/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js (frontend/.gitignore covers the rest)
+node_modules/
+.next/
+
+# OS / editor
+.DS_Store
+Thumbs.db

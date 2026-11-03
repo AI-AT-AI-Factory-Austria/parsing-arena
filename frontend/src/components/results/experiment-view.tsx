@@ -1,0 +1,249 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, FileQuestion, RotateCcw, Trash2, TriangleAlert, WifiOff } from "lucide-react";
+import { api, ApiError } from "@/lib/api";
+import { fileKind, formatDateTime, formatSeconds, pluralize } from "@/lib/format";
+import { useNow } from "@/lib/use-now";
+import { usePolling } from "@/lib/use-polling";
+import type { ArenaModel, ExperimentDetail } from "@/lib/types";
+import { Spinner, StatusChip } from "@/components/ui";
+import { Comparison } from "./comparison";
+import { RunBoard } from "./run-board";
+
+const POLL_MS = 1500;
+
+function isActive(experiment: ExperimentDetail) {
+  return experiment.status === "queued" || experiment.status === "running";
+}
+
+function summary(experiment: ExperimentDetail, now: number | null): string {
+  const done = experiment.runs.filter((r) => r.status === "completed" || r.status === "failed");
+  switch (experiment.status) {
+    case "queued":
+      return experiment.queue_position != null
+        ? `Waiting in the queue (#${experiment.queue_position + 1})`
+        : "Waiting to start";
+    case "running": {
+      const started = experiment.started_at ? new Date(experiment.started_at).getTime() : null;
+      const running = started !== null && now !== null ? ` · ${formatSeconds((now - started) / 1000)}` : "";
+      return `Running · ${done.length} of ${pluralize(experiment.runs.length, "model")} finished${running}`;
+    }
+    case "completed":
+    case "failed": {
+      if (!experiment.started_at || !experiment.finished_at) return "";
+      const seconds =
+        (new Date(experiment.finished_at).getTime() - new Date(experiment.started_at).getTime()) /
+        1000;
+      return `Finished in ${formatSeconds(seconds)}`;
+    }
+  }
+}
+
+export function ExperimentView({ id }: { id: string }) {
+  const router = useRouter();
+  const now = useNow();
+  const { data: experiment, error } = usePolling(
+    id,
+    () => api.experiment(id),
+    (data) => (isActive(data) ? POLL_MS : null),
+  );
+  const catalog = usePolling("models", () => api.models(), () => null);
+  const [busy, setBusy] = useState<"rerun" | "delete" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  if (!experiment) {
+    if (error instanceof ApiError && error.status === 404) {
+      return (
+        <div className="card mx-auto mt-6 flex max-w-xl flex-col items-center px-8 py-14 text-center">
+          <span className="grid size-12 place-items-center rounded-2xl bg-fog text-muted">
+            <FileQuestion aria-hidden className="size-5" />
+          </span>
+          <h1 className="mt-5 text-2xl tracking-tight">Experiment not found</h1>
+          <p className="mt-2 text-muted">It may have been deleted.</p>
+          <Link href="/arena" className="btn btn-primary mt-7">
+            Back to the arena
+          </Link>
+        </div>
+      );
+    }
+    if (error) {
+      return (
+        <p className="card mt-6 flex items-center gap-3 p-6 text-danger">
+          <WifiOff aria-hidden className="size-5" /> {error.message}
+        </p>
+      );
+    }
+    return <ExperimentSkeleton />;
+  }
+
+  const models = new Map<string, ArenaModel>();
+  if (catalog.data) {
+    for (const m of [...catalog.data.models, catalog.data.reference]) models.set(m.id, m);
+  }
+  const doc = experiment.document;
+  const active = isActive(experiment);
+  const allPages = experiment.pages.length === doc.page_count;
+
+  const rerun = async () => {
+    setBusy("rerun");
+    setActionError(null);
+    try {
+      const next = await api.rerun(experiment.id);
+      router.push(`/experiments/${next.id}`);
+    } catch (err) {
+      setActionError((err as Error).message);
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setBusy("delete");
+    setActionError(null);
+    try {
+      await api.deleteExperiment(experiment.id);
+      router.push("/arena");
+    } catch (err) {
+      setActionError((err as Error).message);
+      setBusy(null);
+      setConfirmDelete(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <Link
+          href="/arena"
+          className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-ink"
+        >
+          <ArrowLeft aria-hidden className="size-4" /> Arena
+        </Link>
+        <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-5">
+            <a
+              href={doc.file_url}
+              target="_blank"
+              rel="noreferrer"
+              title="Open the original file"
+              className="hidden shrink-0 overflow-hidden rounded-xl border border-line bg-white sm:block"
+            >
+              <img src={doc.thumbnail_url} alt="" className="h-20 w-auto max-w-[64px] object-contain" />
+            </a>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="break-words text-3xl tracking-[-0.02em] sm:text-4xl">
+                  {doc.filename}
+                </h1>
+                <StatusChip status={experiment.status} />
+              </div>
+              <p className="mt-2 text-sm text-muted">
+                {fileKind(doc.media_type)} ·{" "}
+                {allPages
+                  ? pluralize(doc.page_count, "page")
+                  : `${pluralize(experiment.pages.length, "page")} of ${doc.page_count}`}{" "}
+                · Started {formatDateTime(experiment.created_at)}
+                {summary(experiment, now) && <> · {summary(experiment, now)}</>}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void rerun()}
+              disabled={active || busy !== null}
+              title={active ? "Available once this run has finished" : undefined}
+              className="btn btn-outline btn-sm"
+            >
+              {busy === "rerun" ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <RotateCcw aria-hidden className="size-3.5" />
+              )}
+              Run again
+            </button>
+            {confirmDelete ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void remove()}
+                  disabled={busy !== null}
+                  className="btn btn-sm bg-danger text-white hover:bg-danger/90"
+                >
+                  {busy === "delete" ? (
+                    <Spinner className="size-3.5" />
+                  ) : (
+                    <Trash2 aria-hidden className="size-3.5" />
+                  )}
+                  Delete for good
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="btn btn-ghost btn-sm"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={active || busy !== null}
+                title={active ? "Wait until the run has finished" : undefined}
+                className="btn btn-ghost btn-sm"
+              >
+                <Trash2 aria-hidden className="size-3.5" /> Delete
+              </button>
+            )}
+          </div>
+        </div>
+        {(actionError || experiment.error) && (
+          <p
+            role="alert"
+            className="mt-4 flex items-start gap-2 rounded-2xl bg-danger-wash px-4 py-3 text-sm text-danger"
+          >
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+            {actionError ?? experiment.error}
+          </p>
+        )}
+        {error && (
+          <p className="mt-4 flex items-center gap-2 text-sm text-amber">
+            <WifiOff aria-hidden className="size-4" /> Lost the connection to the arena API.
+            Retrying…
+          </p>
+        )}
+      </div>
+
+      <RunBoard
+        experiment={experiment}
+        models={models}
+        creditsUsd={catalog.data?.llamaparse_usd_per_credit ?? null}
+        now={now}
+      />
+
+      <Comparison experiment={experiment} models={models} />
+    </div>
+  );
+}
+
+export function ExperimentSkeleton() {
+  return (
+    <div className="space-y-8" aria-busy="true" aria-label="Loading experiment">
+      <div className="animate-pulse space-y-4">
+        <div className="h-4 w-16 rounded bg-fog" />
+        <div className="h-9 w-80 max-w-full rounded-lg bg-fog" />
+        <div className="h-4 w-96 max-w-full rounded bg-fog" />
+      </div>
+      <div className="card h-56 animate-pulse" />
+      <div className="grid gap-4 md:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="card h-[420px] animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}

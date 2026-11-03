@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind Logistics: Q3 Operations Report</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1a1a1a; font-size: 10.5pt; line-height: 1.45; }
+  header { display: flex; justify-content: space-between; font-size: 8.5pt; color: #666; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-bottom: 18px; }
+  h1 { font-size: 22pt; margin: 0 0 4px; }
+  .subtitle { color: #555; font-size: 11pt; margin-bottom: 18px; }
+  h2 { font-size: 13.5pt; margin: 20px 0 6px; color: #0b3d91; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 9.5pt; }
+  th, td { border: 1px solid #999; padding: 4px 6px; text-align: right; }
+  th { background: #eef2f8; text-align: center; }
+  td:first-child { text-align: left; }
+  .caption { font-size: 8.5pt; color: #555; margin-bottom: 10px; }
+  .formula { text-align: center; font-family: "Cambria Math", "Times New Roman", serif; font-size: 13pt; margin: 10px 0; }
+  .note { font-size: 8.5pt; color: #555; border-top: 1px solid #ccc; padding-top: 4px; margin-top: 16px; }
+  .page-break { break-after: page; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #888; }
+</style>
+</head>
+<body>
+<header><span>Northwind Logistics GmbH</span><span>Internal · Q3 2026</span></header>
+
+<h1>Q3 Operations Report</h1>
+<div class="subtitle">Warehouse throughput, delivery performance and outlook</div>
+
+<h2>1. Executive summary</h2>
+<p>Total shipments grew by <b>12.4%</b> quarter over quarter, driven by the new Leipzig hub that opened in July.
+On-time delivery improved to <b>96.1%</b>, while the cost per parcel fell from €3.42 to €3.18.
+Returns processing remains the main bottleneck and is addressed in Section 3.</p>
+
+<p><b>Scope:</b> all four German hubs, excluding the pilot site in Graz.</p>
+
+<h2>2. Performance by hub</h2>
+<table>
+  <thead>
+    <tr><th rowspan="2">Hub</th><th colspan="2">Shipments (thousand)</th><th colspan="2">On-time delivery</th><th rowspan="2">Cost per parcel</th></tr>
+    <tr><th>Q2</th><th>Q3</th><th>Q2</th><th>Q3</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Hamburg</td><td>412</td><td>428</td><td>94.8%</td><td>95.9%</td><td>€3.21</td></tr>
+    <tr><td>Leipzig</td><td>—</td><td>156</td><td>—</td><td>97.3%</td><td>€2.94</td></tr>
+    <tr><td>Munich</td><td>365</td><td>371</td><td>95.2%</td><td>96.0%</td><td>€3.37</td></tr>
+    <tr><td>Cologne</td><td>298</td><td>290</td><td>93.1%</td><td>95.4%</td><td>€3.30</td></tr>
+    <tr><td><b>Total</b></td><td><b>1,075</b></td><td><b>1,245</b></td><td><b>94.5%</b></td><td><b>96.1%</b></td><td><b>€3.18</b></td></tr>
+  </tbody>
+</table>
+<div class="caption">Table 1: Shipments, on-time delivery rate and average cost per parcel by hub.</div>
+
+<h2>3. Key actions for Q4</h2>
+<ul>
+  <li>Automate returns sorting in Hamburg (target: −30% handling time).</li>
+  <li>Extend Leipzig night shifts to absorb seasonal peak volume.</li>
+  <li>Renegotiate last-mile contracts in Munich before 1 December.</li>
+</ul>
+
+<p>Capacity planning uses the utilisation ratio</p>
+<div class="formula"><i>U</i> = <i>λ</i> / (<i>c</i> · <i>μ</i>)</div>
+<p>where <i>λ</i> is the arrival rate of parcels per hour, <i>c</i> the number of active sorting lines and <i>μ</i> the service rate per line.</p>
+
+<div class="note">Figures are preliminary and unaudited. Leipzig opened on 3 July 2026, so no Q2 values exist.</div>
+
+<div class="page-break"></div>
+<header><span>Northwind Logistics GmbH</span><span>Internal · Q3 2026</span></header>
+
+<h2>4. Monthly shipment volume</h2>
+<svg width="560" height="250" viewBox="0 0 560 250" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="11">
+  <line x1="50" y1="210" x2="540" y2="210" stroke="#333"/>
+  <line x1="50" y1="20" x2="50" y2="210" stroke="#333"/>
+  <text x="44" y="214" text-anchor="end">0</text>
+  <text x="44" y="150" text-anchor="end">150</text>
+  <text x="44" y="86" text-anchor="end">300</text>
+  <text x="44" y="22" text-anchor="end">450</text>
+  <line x1="50" y1="146" x2="540" y2="146" stroke="#ddd"/>
+  <line x1="50" y1="82" x2="540" y2="82" stroke="#ddd"/>
+  <line x1="50" y1="18" x2="540" y2="18" stroke="#ddd"/>
+  <rect x="80" y="62" width="50" height="148" fill="#0b3d91"/><text x="105" y="228" text-anchor="middle">Apr</text><text x="105" y="56" text-anchor="middle">347</text>
+  <rect x="160" y="57" width="50" height="153" fill="#0b3d91"/><text x="185" y="228" text-anchor="middle">May</text><text x="185" y="51" text-anchor="middle">358</text>
+  <rect x="240" y="53" width="50" height="157" fill="#0b3d91"/><text x="265" y="228" text-anchor="middle">Jun</text><text x="265" y="47" text-anchor="middle">370</text>
+  <rect x="320" y="40" width="50" height="170" fill="#4f8ef7"/><text x="345" y="228" text-anchor="middle">Jul</text><text x="345" y="34" text-anchor="middle">398</text>
+  <rect x="400" y="32" width="50" height="178" fill="#4f8ef7"/><text x="425" y="228" text-anchor="middle">Aug</text><text x="425" y="26" text-anchor="middle">416</text>
+  <rect x="480" y="22" width="50" height="188" fill="#4f8ef7"/><text x="505" y="228" text-anchor="middle">Sep</text><text x="505" y="16" text-anchor="middle">431</text>
+  <text x="300" y="246" text-anchor="middle" fill="#555">Month (2026) · shipments in thousand</text>
+</svg>
+<div class="caption">Figure 1: Monthly shipment volume, Q2 (dark) and Q3 (light).</div>
+
+<h2>5. Outlook</h2>
+<p>For Q4 we expect volume to rise by another <b>18–22%</b> because of the seasonal peak. Hiring for 140 temporary positions
+started in September. The board approved a budget of <b>€2.4 million</b> for the returns automation project, with go-live planned
+for February 2027.</p>
+
+<p><b>Risks:</b> fuel prices, driver availability and a possible rail strike in November.</p>
+</body>
+</html>

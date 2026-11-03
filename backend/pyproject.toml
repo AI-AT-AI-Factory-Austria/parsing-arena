@@ -1,0 +1,45 @@
+[project]
+name = "ocr-arena-backend"
+version = "0.1.0"
+description = "OCR Arena API: run open OCR models and LlamaParse side by side"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy>=2.0",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+    "pillow>=10.4",
+    "pypdfium2>=4.30",
+    "markdown>=3.6",
+    "huggingface-hub>=0.26",
+    "llama-cloud>=1.4.1",
+]
+
+[project.optional-dependencies]
+# Local inference with transformers. PyTorch is installed separately because the
+# right build depends on the hardware (see scripts/install-torch.ps1 / .sh).
+local = ["transformers>=5.18"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.7"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["app/engines/kdl/kdl_frontier_nano.py", "app/engines/kdl/florin_emission.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "BLE", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
