@@ -18,6 +18,7 @@ function backendLabel(model: ArenaModel, health: Health): string {
   const backend = model.availability.backend;
   if (backend === "api") return "Hosted API";
   if (backend === "endpoint") return "vLLM endpoint";
+  if (backend === "cpu") return "CPU";
   const device = health.local_device;
   if (device?.available && device.device !== "cpu") return "Local GPU";
   return "Local CPU";
@@ -85,6 +86,7 @@ export function ArenaWorkspace() {
 
   const adoptDocument = (document: DocumentInfo) => {
     setDoc(document);
+    setStarting(false);
     setStartError(null);
     if (document.page_count > maxPages) {
       setPageMode("custom");
@@ -144,6 +146,9 @@ export function ArenaWorkspace() {
       router.push(`/experiments/${experiment.id}`);
     } catch (err) {
       setStartError((err as Error).message);
+    } finally {
+      // The page stays mounted (hidden) after navigating to the results, so
+      // coming back must find the button usable again.
       setStarting(false);
     }
   };
@@ -294,7 +299,7 @@ export function ArenaWorkspace() {
                             className="shrink-0 font-mono text-sm tabular-nums text-muted"
                             title="ParseBench overall score"
                           >
-                            {formatScore(model.scores.overall)}
+                            {model.scores ? formatScore(model.scores.overall) : "–"}
                           </span>
                         </span>
                         <span className="mt-0.5 block text-xs text-faint">

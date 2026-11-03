@@ -15,6 +15,9 @@ function backendText(run: Run): string | null {
   const m = run.meta;
   if (run.kind === "reference") return m.tier ? `LlamaParse API · ${m.tier}` : "LlamaParse API";
   if (m.backend === "endpoint") return "vLLM endpoint";
+  if (m.backend === "pypdf") return "Text layer only · no model";
+  if (m.backend === "tesseract") return `Tesseract ${m.version ?? ""} · ${m.lang ?? "eng"} · CPU`;
+  if (m.backend === "docling") return `Docling · CPU, ${m.threads ?? 4} threads`;
   if (m.backend === "transformers") {
     const device = m.device_name ? String(m.device_name).replace(/\(TM\)/g, "") : "local";
     return [device, m.runtime, m.dtype].filter(Boolean).join(" · ");

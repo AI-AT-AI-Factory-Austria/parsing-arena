@@ -15,8 +15,11 @@ def original_path(document_id: str, extension: str) -> Path:
     return document_dir(document_id) / f"original{extension}"
 
 
-def page_image_path(document_id: str, page_number: int, dpi: int) -> Path:
-    return document_dir(document_id) / "pages" / f"{dpi}dpi" / f"page-{page_number:04d}.png"
+def page_image_path(
+    document_id: str, page_number: int, dpi: int, max_pixels: int | None = None
+) -> Path:
+    folder = f"{dpi}dpi" if max_pixels is None else f"{dpi}dpi-max{max_pixels}"
+    return document_dir(document_id) / "pages" / folder / f"page-{page_number:04d}.png"
 
 
 def thumbnail_path(document_id: str) -> Path:

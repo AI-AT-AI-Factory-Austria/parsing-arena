@@ -9,7 +9,7 @@ export type Scores = {
 
 export type Availability = {
   runnable: boolean;
-  backend: "local" | "endpoint" | "api" | null;
+  backend: "local" | "cpu" | "endpoint" | "api" | null;
   reason: string | null;
   loaded: boolean | null;
 };
@@ -29,7 +29,8 @@ export type ArenaModel = {
   verified: boolean;
   lineage: string;
   pipeline: string;
-  scores: Scores;
+  /** null for models that are not on the ParseBench leaderboard. */
+  scores: Scores | null;
   availability: Availability;
 };
 

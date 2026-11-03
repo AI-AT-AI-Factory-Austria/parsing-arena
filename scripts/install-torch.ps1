@@ -30,8 +30,9 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "uv sync failed" }
 
   # The extra index takes priority over PyPI, so torch comes from it and the
-  # remaining dependencies from PyPI.
-  uv pip install --extra-index-url $index torch torchvision
+  # remaining dependencies from PyPI. Reinstalling replaces a torch build for
+  # other hardware that a previous install may have left behind.
+  uv pip install --extra-index-url $index --reinstall-package torch --reinstall-package torchvision torch torchvision
   if ($LASTEXITCODE -ne 0) { throw "installing torch failed" }
 
   .venv\Scripts\python.exe -c "import torch; gpu = torch.cuda.is_available(); print('torch', torch.__version__, '| GPU:', torch.cuda.get_device_name(0) if gpu else 'none (CPU)')"

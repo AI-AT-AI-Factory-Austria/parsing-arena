@@ -3,26 +3,45 @@ from typing import Any
 from ..catalog import LLAMAPARSE_ID, MODELS, ArenaModel
 from ..config import Settings
 from .backends.transformers_local import LocalModelPool, describe_local_device
-from .kdl.engine import VARIANTS, KdlEngine
+from .falcon import FalconOcrEngine
+from .infinity import InfinityParser2Engine
+from .kdl.engine import KdlEngine
+from .lightonocr import LightOnOcr3Engine
 from .llamaparse import LlamaParseEngine
+from .mineru import MinerUEngine
+from .nemotron import NemotronEngine
+from .open_engine import OpenModelEngine
+from .ovisocr import OvisOcr3Engine
+from .tools import DoclingEngine, PypdfEngine, TesseractEngine
+
+ENGINES: dict[str, type[OpenModelEngine]] = {
+    "rakedoc-nano": KdlEngine,
+    "aeddix-alpine-ocr": KdlEngine,
+    "florin-parser-nano": KdlEngine,
+    "nemotron-3.5-parse": NemotronEngine,
+    "lightonocr-3-0.8b": LightOnOcr3Engine,
+    "mineru2.5-pro-2605": MinerUEngine,
+    "infinity-parser2-flash": InfinityParser2Engine,
+    "pypdf": PypdfEngine,
+    "tesseract": TesseractEngine,
+    "docling": DoclingEngine,
+    "falcon-ocr": FalconOcrEngine,
+    "ovisocr3": OvisOcr3Engine,
+}
 
 
 class EngineRegistry:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.pool = LocalModelPool(
-            device=settings.local_device,
-            dtype=settings.local_dtype,
-            max_batch=settings.local_max_batch,
-            max_model_len=settings.local_max_model_len,
-            keep_loaded=settings.keep_models_loaded,
+            keep_loaded=settings.keep_models_loaded, max_loaded=settings.max_loaded_models
         )
         self.llamaparse = LlamaParseEngine(settings)
-        self._open: dict[str, KdlEngine] = {
-            m.id: KdlEngine(m, settings, self.pool) for m in MODELS if m.id in VARIANTS
+        self._open: dict[str, OpenModelEngine] = {
+            m.id: ENGINES[m.id](m, settings, self.pool) for m in MODELS if m.id in ENGINES
         }
 
-    def open_engine(self, model_id: str) -> KdlEngine | None:
+    def open_engine(self, model_id: str) -> OpenModelEngine | None:
         return self._open.get(model_id)
 
     def availability(self, model: ArenaModel) -> dict[str, Any]:
@@ -40,7 +59,7 @@ class EngineRegistry:
             "reason": reason,
         }
         if engine.backend_kind == "local" and reason is None:
-            info["loaded"] = self.pool.is_loaded(model.hf_repo or "", model.revision)
+            info["loaded"] = engine.is_loaded()
         return info
 
     def local_device(self) -> dict[str, Any]:

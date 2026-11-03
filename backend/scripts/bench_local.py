@@ -24,14 +24,14 @@ def main() -> None:
     from PIL import Image
     from transformers import AutoModelForImageTextToText, AutoProcessor, GenerationConfig
 
-    from app.engines.backends.transformers_local import _patch_embed_convs_as_matmul
+    from app.engines.backends.transformers_local import patch_embed_convs_as_matmul
 
     repo = "cloudraker/rakedoc-nano"
     processor = AutoProcessor.from_pretrained(repo)
     model = AutoModelForImageTextToText.from_pretrained(
         repo, dtype=torch.bfloat16, attn_implementation=args.attn
     )
-    _patch_embed_convs_as_matmul(model)
+    patch_embed_convs_as_matmul(model)
     model.to("cuda").eval()
 
     def run(size: tuple[int, int], new_tokens: int) -> tuple[float, int]:

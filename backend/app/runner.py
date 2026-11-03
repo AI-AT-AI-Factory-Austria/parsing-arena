@@ -14,14 +14,13 @@ from collections import deque
 from dataclasses import asdict
 from typing import Any
 
-from PIL import Image
 from sqlalchemy import select
 
 from . import documents, storage
 from .catalog import LLAMAPARSE_ID
 from .config import Settings
 from .db import session_scope
-from .engines.base import EngineUnavailable, ParseOutput, Report
+from .engines.base import EngineUnavailable, PageSource, ParseOutput, RenderSpec, Report
 from .engines.registry import EngineRegistry
 from .models import Document, Experiment, ModelRun, utcnow
 
@@ -142,10 +141,8 @@ class Runner:
         if reference:
             reference_task = asyncio.create_task(self._run_reference(reference[0], document, pages))
         try:
-            if open_runs:
-                images = await asyncio.to_thread(self._load_pages, document, pages)
-                for run_id, model_id in open_runs:
-                    await self._run_open_model(experiment_id, run_id, model_id, images, pages)
+            for run_id, model_id in open_runs:
+                await self._run_open_model(experiment_id, run_id, model_id, document, pages)
         finally:
             if reference_task is not None:
                 await reference_task
@@ -160,13 +157,20 @@ class Runner:
                 experiment.error = "No model produced an output."
             experiment.finished_at = utcnow()
 
-    def _load_pages(self, document: Document, pages: list[int]) -> list[Image.Image]:
-        images = []
-        for page_number in pages:
-            path = documents.page_image(document, page_number, dpi=self.settings.render_dpi)
-            with Image.open(path) as image:
-                images.append(image.convert("RGB"))
-        return images
+    @staticmethod
+    def _render_pages(document: Document, pages: list[int], spec: RenderSpec | None) -> PageSource:
+        paths = {}
+        if spec is not None:
+            paths = {
+                n: documents.page_image(document, n, dpi=spec.dpi, max_pixels=spec.max_pixels)
+                for n in pages
+            }
+        return PageSource(
+            numbers=list(pages),
+            paths=paths,
+            source=storage.original_path(document.id, document.extension),
+            extension=document.extension,
+        )
 
     def _fail_experiment(self, experiment_id: str, message: str) -> None:
         with session_scope() as session:
@@ -204,7 +208,7 @@ class Runner:
         experiment_id: str,
         run_id: str,
         model_id: str,
-        images: list[Image.Image],
+        document: Document,
         pages: list[int],
     ) -> None:
         engine = self.registry.open_engine(model_id)
@@ -218,6 +222,8 @@ class Runner:
             return
         _update_run(run_id, status="loading", started_at=utcnow(), progress={"phase": "loading"})
         try:
+            # Rendering happens before the parse timer so every model is timed on inference.
+            source = await asyncio.to_thread(self._render_pages, document, pages, engine.render)
             backend, load_seconds = await engine.prepare()
             _update_run(
                 run_id,
@@ -229,8 +235,7 @@ class Runner:
             started = time.perf_counter()
             output = await engine.parse(
                 backend,
-                images,
-                pages,
+                source,
                 report=self._reporter(run_id),
                 artifact_dir=storage.run_dir(experiment_id, run_id),
             )
@@ -244,8 +249,7 @@ class Runner:
                 run_id, status="failed", error=f"{type(exc).__name__}: {exc}", finished_at=utcnow()
             )
         finally:
-            if engine.model.hf_repo:
-                engine.pool.release(engine.model.hf_repo, engine.model.revision)
+            await engine.release()
 
     async def _run_reference(self, run_id: str, document: Document, pages: list[int]) -> None:
         engine = self.registry.llamaparse

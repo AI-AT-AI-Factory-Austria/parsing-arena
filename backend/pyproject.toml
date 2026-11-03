@@ -16,22 +16,41 @@ dependencies = [
     "markdown>=3.6",
     "huggingface-hub>=0.26",
     "llama-cloud>=1.4.1",
+    "beautifulsoup4>=4.13",
+    "markdown2>=2.5.5",
+    "mineru-vl-utils>=2.0.8,<2.1",
+    "pypdf>=6.0",
+    "pytesseract>=0.3.13",
 ]
 
 [project.optional-dependencies]
-# Local inference with transformers. PyTorch is installed separately because the
-# right build depends on the hardware (see scripts/install-torch.ps1 / .sh).
-local = ["transformers>=5.18"]
+# Local inference. PyTorch itself is installed separately because the right build
+# depends on the hardware (see scripts/install-torch.ps1 / .sh).
+local = [
+    "docling>=2.140",
+    "timm>=1.0.22",
+    "transformers>=5.18",
+]
 
 [dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.7"]
 
 [tool.uv]
 package = false
+# PyTorch comes from scripts/install-torch (the right build for the hardware).
+# This marker never matches, so nothing in the lockfile installs a generic build.
+override-dependencies = [
+    "torch; sys_platform == 'never'",
+    "torchvision; sys_platform == 'never'",
+]
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["app/engines/kdl/kdl_frontier_nano.py", "app/engines/kdl/florin_emission.py"]
+extend-exclude = [
+    "app/engines/kdl/kdl_frontier_nano.py",
+    "app/engines/kdl/florin_emission.py",
+    "app/engines/vendor/parsebench_*.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "BLE", "RUF"]

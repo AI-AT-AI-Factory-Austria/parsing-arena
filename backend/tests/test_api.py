@@ -21,9 +21,18 @@ def test_models_catalog(client):
     body = client.get("/api/models").json()
     ids = [m["id"] for m in body["models"]]
     assert ids[:2] == ["rakedoc-nano", "aeddix-alpine-ocr"]
-    assert len(ids) == 7
-    implemented = {m["id"] for m in body["models"] if m["implemented"]}
-    assert implemented == {"rakedoc-nano", "aeddix-alpine-ocr"}
+    assert len(ids) == 15
+    by_id = {m["id"]: m for m in body["models"]}
+    tools = ("pypdf", "tesseract", "docling")
+    vlms = [m for m in body["models"] if m["implemented"] and m["id"] not in tools]
+    assert all(m["revision"] for m in vlms if m["id"] != "rakedoc-nano")
+    # CPU tools stay available when local GPU inference is off.
+    assert by_id["pypdf"]["availability"] == {
+        "runnable": True,
+        "backend": "cpu",
+        "reason": None,
+        "loaded": None,
+    }
     rakedoc = body["models"][0]
     assert rakedoc["scores"]["overall"] == pytest.approx(77.23)
     assert rakedoc["availability"]["runnable"] is False

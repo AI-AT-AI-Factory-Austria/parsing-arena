@@ -26,7 +26,7 @@ const PRINCIPLES = [
   {
     icon: PackageOpen,
     title: "Open OCR models only",
-    text: "Every model in the line-up has open weights and a published license, so the one you pick can later run on your own servers or on HPC, without vendor lock-in.",
+    text: "Every parser in the line-up is open source with published weights and a license, so the one you pick can later run on your own servers or on HPC, without vendor lock-in.",
   },
   {
     icon: Gauge,
@@ -90,7 +90,7 @@ export default function HomePage() {
             <dl className="mt-10 grid max-w-2xl grid-cols-3 gap-6 border-t border-ash/70 pt-6">
               <div>
                 <dt className="eyebrow text-[11px]">Line-up</dt>
-                <dd className="mt-1 text-2xl tracking-tight">7 open models</dd>
+                <dd className="mt-1 text-2xl tracking-tight">15 open parsers</dd>
               </div>
               <div>
                 <dt className="eyebrow text-[11px]">Compared on</dt>
@@ -189,8 +189,9 @@ export default function HomePage() {
               ParseBench has not independently verified yet.
             </li>
             <li>
-              Aeddix Alpine OCR&apos;s score requires the KDL two-stage pipeline (layout detection,
-              then region recognition). The arena runs it, and rakedoc-nano, exactly that way.
+              Every model runs with the pipeline, page resolution, prompts and post-processing its
+              ParseBench score was measured with, e.g. the KDL two-stage pipeline that Aeddix
+              Alpine OCR&apos;s score requires.
             </li>
           </ul>
         </div>

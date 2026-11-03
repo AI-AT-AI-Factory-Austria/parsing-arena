@@ -15,6 +15,7 @@ const DIMENSIONS: { key: keyof Omit<Scores, "overall">; label: string }[] = [
 
 const BACKEND_LABEL: Record<string, string> = {
   local: "Runs locally",
+  cpu: "Runs on the CPU",
   endpoint: "vLLM endpoint",
   api: "Hosted API",
 };
@@ -69,7 +70,7 @@ function ModelRow({ model, rank }: { model: ArenaModel; rank: number | null }) {
       )}
     >
       <td className="py-4 pl-5 pr-2 font-mono text-xs text-faint tabular-nums sm:pl-6">
-        {rank ?? "Ref"}
+        {reference ? "Ref" : (rank ?? "–")}
       </td>
       <td className="min-w-[17rem] py-4 pr-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -109,14 +110,20 @@ function ModelRow({ model, rank }: { model: ArenaModel; rank: number | null }) {
         {model.params}
       </td>
       <td className="py-4 pr-6">
-        <ScoreBar value={model.scores.overall} reference={reference} />
+        {model.scores ? (
+          <ScoreBar value={model.scores.overall} reference={reference} />
+        ) : (
+          <span className="text-xs text-faint" title="Not on the ParseBench leaderboard">
+            Not benchmarked
+          </span>
+        )}
       </td>
       {DIMENSIONS.map((d) => (
         <td
           key={d.key}
           className="hidden py-4 pr-4 text-right font-mono text-[13px] tabular-nums text-muted xl:table-cell"
         >
-          {formatScore(model.scores[d.key])}
+          {model.scores ? formatScore(model.scores[d.key]) : "–"}
         </td>
       ))}
       <td className="whitespace-nowrap py-4 pr-6 text-sm text-body">{model.license}</td>
@@ -142,7 +149,9 @@ export async function ModelsTable() {
       </div>
     );
   }
-  const open = [...data.models].sort((a, b) => b.scores.overall - a.scores.overall);
+  const open = [...data.models].sort(
+    (a, b) => (b.scores?.overall ?? -1) - (a.scores?.overall ?? -1),
+  );
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
@@ -187,7 +196,7 @@ export async function ModelsTable() {
           <tbody>
             <ModelRow model={data.reference} rank={null} />
             {open.map((model, i) => (
-              <ModelRow key={model.id} model={model} rank={i + 1} />
+              <ModelRow key={model.id} model={model} rank={model.scores ? i + 1 : null} />
             ))}
           </tbody>
         </table>

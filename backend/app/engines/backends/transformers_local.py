@@ -1,13 +1,15 @@
-"""Local chat backend: runs a Qwen2-VL checkpoint with transformers.
+"""Local chat backend: runs a vision-language checkpoint with transformers.
 
 ParseBench measured these models behind vLLM. To keep outputs comparable the
 backend reproduces what that server does with each request:
 
-- the chat messages are rendered with the checkpoint's own chat template,
-- ``temperature: 0`` means greedy decoding,
+- the chat messages are rendered with the checkpoint's own chat template and
+  the request's ``chat_template_kwargs``,
+- sampling follows vLLM: ``temperature`` below 1e-5 or ``top_k: 1`` is greedy,
+  unset values fall back to the checkpoint's ``generation_config.json``,
 - presence/frequency penalties use vLLM semantics (output tokens only),
 - top-level ``extra_args`` are ignored, exactly like stock vLLM ignores them,
-- ``max_tokens`` is capped by the 8192-token context the benchmark served with,
+- ``max_tokens`` is capped by the context length the benchmark served with,
 - output stops at EOS and is decoded with the request's ``skip_special_tokens``.
 
 Concurrent requests with identical sampling settings are micro-batched, which
@@ -22,11 +24,13 @@ import gc
 import io
 import logging
 import os
+import sys
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from PIL import Image
 
@@ -109,6 +113,26 @@ def describe_local_device(preference: str = "auto") -> dict[str, Any]:
         return info
 
 
+def free_accelerator_memory() -> None:
+    gc.collect()
+    torch = sys.modules.get("torch")
+    if torch is not None and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+class LocalModel(Protocol):
+    """Something the pool can load, keep and unload (a checkpoint plus its runtime)."""
+
+    @property
+    def loaded(self) -> bool: ...
+
+    def load(self) -> None: ...
+
+    def unload(self) -> None: ...
+
+    def describe(self) -> dict[str, Any]: ...
+
+
 @dataclass(frozen=True)
 class _Sampling:
     max_tokens: int
@@ -116,6 +140,13 @@ class _Sampling:
     frequency_penalty: float
     repetition_penalty: float
     skip_special_tokens: bool
+    temperature: float = 0.0
+    top_p: float = 1.0
+    top_k: int = -1
+
+    @property
+    def greedy(self) -> bool:
+        return self.temperature < 1e-5 or self.top_k == 1
 
 
 @dataclass
@@ -160,6 +191,7 @@ class LocalVisionModel:
         self._processor = None
         self._eos_ids: set[int] = set()
         self._pad_id: int | None = None
+        self._defaults = {"temperature": 1.0, "top_p": 1.0, "top_k": -1}
         self._queue: deque[_Pending] = deque()
         self._wakeup: asyncio.Event | None = None
         self._worker: asyncio.Task | None = None
@@ -185,7 +217,7 @@ class LocalVisionModel:
         model = AutoModelForImageTextToText.from_pretrained(
             self.repo, revision=self.revision, dtype=dtype
         )
-        _patch_embed_convs_as_matmul(model)
+        patch_embed_convs_as_matmul(model)
         model.to(device)
         model.eval()
 
@@ -199,6 +231,14 @@ class LocalVisionModel:
         if pad is None:
             pad = next(iter(eos_ids))
 
+        # vLLM uses the checkpoint's generation_config for sampling values a
+        # request leaves unset.
+        gen = model.generation_config
+        for key in ("temperature", "top_p", "top_k"):
+            value = getattr(gen, key, None)
+            if value is not None:
+                self._defaults[key] = value
+
         self._processor = processor
         self._model = model
         self._eos_ids = {int(i) for i in eos_ids if i is not None}
@@ -208,20 +248,14 @@ class LocalVisionModel:
 
         # Warm-up compiles kernels so the first real page is not penalised.
         warm = Image.new("RGB", (224, 224), "white")
-        prompt = self._render_prompt(
-            [{"type": "image"}, {"type": "text", "text": "\nText Recognition:\n"}]
-        )
+        prompt = self._render_prompt([{"type": "image"}, {"type": "text", "text": "Text:"}], {})
         sampling = _Sampling(4, 0.0, 0.0, 1.0, True)
         self._generate_batch([_Pending(sampling, prompt, [warm], None)])  # type: ignore[arg-type]
 
     def unload(self) -> None:
         self._model = None
         self._processor = None
-        gc.collect()
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        free_accelerator_memory()
 
     def describe(self) -> dict[str, Any]:
         info = dict(describe_local_device(self._device_pref))
@@ -262,22 +296,39 @@ class LocalVisionModel:
                 parts.append({"type": "image"})
             elif part.get("type") == "text":
                 parts.append({"type": "text", "text": part["text"]})
-        prompt = self._render_prompt(parts)
+        prompt = self._render_prompt(parts, payload.get("chat_template_kwargs") or {})
+
+        def pick(key: str) -> Any:
+            value = payload.get(key)
+            return self._defaults[key] if value is None else value
+
         sampling = _Sampling(
             max_tokens=int(payload.get("max_tokens") or 1024),
             presence_penalty=float(payload.get("presence_penalty") or 0.0),
             frequency_penalty=float(payload.get("frequency_penalty") or 0.0),
             repetition_penalty=float(payload.get("repetition_penalty") or 1.0),
             skip_special_tokens=bool(payload.get("skip_special_tokens", True)),
+            temperature=float(pick("temperature")),
+            top_p=float(pick("top_p")),
+            top_k=int(pick("top_k")),
         )
+        if sampling.greedy:
+            sampling = _Sampling(
+                sampling.max_tokens,
+                sampling.presence_penalty,
+                sampling.frequency_penalty,
+                sampling.repetition_penalty,
+                sampling.skip_special_tokens,
+            )
         future = asyncio.get_running_loop().create_future()
         return _Pending(sampling, prompt, images, future)
 
-    def _render_prompt(self, parts: list[dict[str, Any]]) -> str:
+    def _render_prompt(self, parts: list[dict[str, Any]], template_kwargs: dict[str, Any]) -> str:
         return self._processor.apply_chat_template(  # type: ignore[union-attr]
             [{"role": "user", "content": parts}],
             add_generation_prompt=True,
             tokenize=False,
+            **template_kwargs,
         )
 
     def _ensure_worker(self) -> None:
@@ -347,14 +398,23 @@ class LocalVisionModel:
                         prompt_len, sampling.presence_penalty, sampling.frequency_penalty
                     )
                 )
-            config = GenerationConfig(
-                max_new_tokens=max_new,
-                do_sample=False,
-                repetition_penalty=sampling.repetition_penalty,
-                eos_token_id=sorted(self._eos_ids),
-                pad_token_id=self._pad_id,
-                use_cache=True,
-            )
+            options: dict[str, Any] = {
+                "max_new_tokens": max_new,
+                "do_sample": False,
+                "repetition_penalty": sampling.repetition_penalty,
+                "eos_token_id": sorted(self._eos_ids),
+                "pad_token_id": self._pad_id,
+                "use_cache": True,
+            }
+            if not sampling.greedy:
+                options.update(
+                    do_sample=True,
+                    temperature=sampling.temperature,
+                    top_p=sampling.top_p,
+                    # vLLM's -1 (disabled) is 0 in transformers.
+                    top_k=max(0, sampling.top_k),
+                )
+            config = GenerationConfig(**options)
             started = time.perf_counter()
             output = model.generate(**inputs, generation_config=config, logits_processor=processors)
             logger.debug(
@@ -380,7 +440,7 @@ class LocalVisionModel:
         return results
 
 
-def _patch_embed_convs_as_matmul(model) -> int:
+def patch_embed_convs_as_matmul(model) -> int:
     """Swap stride == kernel Conv3d layers (the ViT patch embedding) for a matmul.
 
     The result is identical, but MIOpen on ROCm autotunes every new input
@@ -439,50 +499,46 @@ class _OutputTokenPenalties:
 
 
 class LocalModelPool:
-    """Keeps loaded checkpoints around between experiments."""
+    """Keeps loaded checkpoints around between experiments, up to ``max_loaded``."""
 
-    def __init__(
-        self, *, device: str, dtype: str, max_batch: int, max_model_len: int, keep_loaded: bool
-    ):
-        self._device = device
-        self._dtype = dtype
-        self._max_batch = max_batch
-        self._max_model_len = max_model_len
+    def __init__(self, *, keep_loaded: bool, max_loaded: int):
         self._keep_loaded = keep_loaded
-        self._models: dict[tuple[str, str | None], LocalVisionModel] = {}
+        self._max_loaded = max(1, max_loaded)
+        self._models: OrderedDict[Hashable, LocalModel] = OrderedDict()
         self._lock = asyncio.Lock()
 
-    def is_loaded(self, repo: str, revision: str | None) -> bool:
-        model = self._models.get((repo, revision))
+    def is_loaded(self, key: Hashable) -> bool:
+        model = self._models.get(key)
         return bool(model and model.loaded)
 
-    async def acquire(self, repo: str, revision: str | None) -> tuple[LocalVisionModel, float]:
+    async def acquire(
+        self, key: Hashable, build: Callable[[], LocalModel]
+    ) -> tuple[LocalModel, float]:
         """Return the loaded model and the seconds spent loading it (0 if cached)."""
         async with self._lock:
-            key = (repo, revision)
             model = self._models.get(key)
             if model is not None and model.loaded:
+                self._models.move_to_end(key)
                 return model, 0.0
-            if not self._keep_loaded:
-                for other in self._models.values():
-                    other.unload()
-                self._models.clear()
-            model = LocalVisionModel(
-                repo,
-                revision,
-                device=self._device,
-                dtype=self._dtype,
-                max_batch=self._max_batch,
-                max_model_len=self._max_model_len,
-            )
+            self._models.pop(key, None)
+            keep = self._max_loaded - 1 if self._keep_loaded else 0
+            while len(self._models) > keep:
+                _, old = self._models.popitem(last=False)
+                await asyncio.to_thread(old.unload)
+            model = build()
             started = time.perf_counter()
-            await asyncio.to_thread(model.load)
+            try:
+                await asyncio.to_thread(model.load)
+            except BaseException:
+                await asyncio.to_thread(model.unload)
+                raise
             self._models[key] = model
             return model, time.perf_counter() - started
 
-    def release(self, repo: str, revision: str | None) -> None:
+    async def release(self, key: Hashable) -> None:
         if self._keep_loaded:
             return
-        model = self._models.pop((repo, revision), None)
-        if model is not None:
-            model.unload()
+        async with self._lock:
+            model = self._models.pop(key, None)
+            if model is not None:
+                await asyncio.to_thread(model.unload)

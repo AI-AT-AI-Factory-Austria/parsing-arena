@@ -24,11 +24,12 @@ cd "$(dirname "$0")/../backend"
 # --inexact keeps an already installed torch; plain `uv sync` would remove it.
 uv sync --extra local --inexact
 
+reinstall=(--reinstall-package torch --reinstall-package torchvision)
 if [ -n "$index" ]; then
   # The extra index takes priority over PyPI, so torch comes from it.
-  uv pip install --extra-index-url "$index" torch torchvision
+  uv pip install --extra-index-url "$index" "${reinstall[@]}" torch torchvision
 else
-  uv pip install torch torchvision
+  uv pip install "${reinstall[@]}" torch torchvision
 fi
 
 .venv/bin/python -c "import torch; gpu = torch.cuda.is_available(); mps = torch.backends.mps.is_available(); print('torch', torch.__version__, '| accelerator:', torch.cuda.get_device_name(0) if gpu else ('Apple MPS' if mps else 'none (CPU)'))"

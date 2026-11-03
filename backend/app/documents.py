@@ -1,6 +1,7 @@
 """Document ingestion and page rendering."""
 
 import hashlib
+import math
 import shutil
 import threading
 from pathlib import Path
@@ -103,31 +104,47 @@ def count_pages(path: Path, extension: str) -> int:
         return getattr(image, "n_frames", 1) if extension == ".tif" else 1
 
 
-def render_page(path: Path, extension: str, page_number: int, *, dpi: int) -> Image.Image:
-    """Render one 1-based page as RGB. Images are used at their native resolution."""
+def render_page(
+    path: Path, extension: str, page_number: int, *, dpi: int, max_pixels: int | None = None
+) -> Image.Image:
+    """Render one 1-based page as RGB. Images are used at their native resolution.
+
+    With ``max_pixels`` a PDF page is rendered at the highest DPI up to ``dpi``
+    that stays within the cap, the way ParseBench sizes pages for LightOnOCR.
+    """
     if extension == ".pdf":
         with _pdfium_lock:
             pdf = pdfium.PdfDocument(path)
             try:
                 page = pdf[page_number - 1]
                 try:
-                    return page.render(scale=dpi / 72).to_pil().convert("RGB")
+                    if max_pixels:
+                        width_in, height_in = (abs(v) / 72 for v in page.get_size())
+                        dpi = min(dpi, math.floor(math.sqrt(max_pixels / (width_in * height_in))))
+                    image = page.render(scale=dpi / 72).to_pil().convert("RGB")
                 finally:
                     page.close()
             finally:
                 pdf.close()
+        if max_pixels and image.width * image.height > max_pixels:
+            scale = math.sqrt(max_pixels / (image.width * image.height))
+            size = (int(image.width * scale), int(image.height * scale))
+            image = image.resize(size, Image.Resampling.LANCZOS)
+        return image
     with Image.open(path) as image:
         frames = ImageSequence.Iterator(image)
         frame = frames[page_number - 1] if extension == ".tif" else image
         return frame.convert("RGB")
 
 
-def page_image(document: Document, page_number: int, *, dpi: int) -> Path:
+def page_image(
+    document: Document, page_number: int, *, dpi: int, max_pixels: int | None = None
+) -> Path:
     """Path of the rendered page PNG, rendering it on first use."""
-    target = storage.page_image_path(document.id, page_number, dpi)
+    target = storage.page_image_path(document.id, page_number, dpi, max_pixels)
     if not target.exists():
         source = storage.original_path(document.id, document.extension)
-        image = render_page(source, document.extension, page_number, dpi=dpi)
+        image = render_page(source, document.extension, page_number, dpi=dpi, max_pixels=max_pixels)
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_suffix(".part")
         image.save(tmp, format="PNG")
