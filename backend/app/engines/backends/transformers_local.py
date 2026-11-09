@@ -143,6 +143,7 @@ class _Sampling:
     temperature: float = 0.0
     top_p: float = 1.0
     top_k: int = -1
+    require_complete: bool = False
 
     @property
     def greedy(self) -> bool:
@@ -311,6 +312,7 @@ class LocalVisionModel:
             temperature=float(pick("temperature")),
             top_p=float(pick("top_p")),
             top_k=int(pick("top_k")),
+            require_complete=bool(payload.get("arena_require_complete", False)),
         )
         if sampling.greedy:
             sampling = _Sampling(
@@ -319,6 +321,7 @@ class LocalVisionModel:
                 sampling.frequency_penalty,
                 sampling.repetition_penalty,
                 sampling.skip_special_tokens,
+                require_complete=sampling.require_complete,
             )
         future = asyncio.get_running_loop().create_future()
         return _Pending(sampling, prompt, images, future)
@@ -430,6 +433,9 @@ class LocalVisionModel:
         results: list[str | None] = []
         for row in output[:, prompt_len:].tolist():
             cut = next((i for i, tok in enumerate(row) if tok in self._eos_ids), len(row))
+            if sampling.require_complete and cut == len(row):
+                results.append(None)
+                continue
             results.append(
                 tokenizer.decode(
                     row[:cut],

@@ -24,6 +24,8 @@ class OpenAICompatBackend:
         self._client = httpx.AsyncClient(timeout=timeout_s, headers=headers)
 
     async def complete(self, payload: dict) -> str | None:
+        payload = dict(payload)
+        require_complete = payload.pop("arena_require_complete", False)
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
@@ -39,7 +41,12 @@ class OpenAICompatBackend:
                     logger.warning("4xx from endpoint (not retried): %s", resp.text[:200])
                     return None
                 data = resp.json()
-                return data["choices"][0]["message"]["content"]
+                choice = data["choices"][0]
+                if require_complete and choice.get("finish_reason") != "stop":
+                    raise RuntimeError(
+                        "Table reconstruction did not finish; page OCR was retained."
+                    )
+                return choice["message"]["content"]
             except (httpx.HTTPError, TimeoutError, KeyError, ValueError) as e:
                 last_exc = e
                 await asyncio.sleep(min(10.0, 2.0 * (2**attempt)))

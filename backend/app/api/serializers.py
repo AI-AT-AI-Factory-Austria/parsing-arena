@@ -33,6 +33,7 @@ def model_out(model: ArenaModel, registry: EngineRegistry) -> ModelOut:
         verified=model.verified,
         lineage=model.lineage,
         pipeline=model.pipeline,
+        specialty=model.specialty,
         scores=ScoresOut(**vars(model.scores)) if model.scores else None,
         availability=AvailabilityOut(**registry.availability(model)),
     )

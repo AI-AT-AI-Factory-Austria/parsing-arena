@@ -14,6 +14,7 @@ cd "$(dirname "$0")/../backend"
 
 # The lock deliberately excludes torch: use the GPU-specific wheel set explicitly.
 uv sync --locked --extra local --inexact --python 3.12
+.venv/bin/python -m playwright install --with-deps chromium
 uv pip install --python .venv/bin/python --reinstall-package torch --reinstall-package torchvision \
   --index-url https://download.pytorch.org/whl/cu128 torch==2.11.0 torchvision==0.26.0
 

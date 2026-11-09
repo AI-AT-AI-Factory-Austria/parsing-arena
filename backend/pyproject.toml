@@ -18,6 +18,8 @@ dependencies = [
     "llama-cloud>=1.4.1",
     "beautifulsoup4>=4.13",
     "markdown2>=2.5.5",
+    "markdown-it-py>=3.0",
+    "playwright>=1.56",
     "mineru-vl-utils>=2.0.8,<2.1",
     "pypdf>=6.0",
     "pytesseract>=0.3.13",
@@ -54,6 +56,7 @@ extend-exclude = [
     "app/engines/kdl/kdl_frontier_nano.py",
     "app/engines/kdl/florin_emission.py",
     "app/engines/vendor/parsebench_*.py",
+    "app/engines/vendor/ovis_document_crosspage.py",
 ]
 
 [tool.ruff.lint]

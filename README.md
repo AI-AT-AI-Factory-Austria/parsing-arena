@@ -4,41 +4,50 @@ Evaluate the open-source OCR models that best suit your documents.
 
 Drop in a PDF or image. OCR Arena parses it with open OCR models of different sizes, times
 every run, and shows each model's output next to the original page and next to
-**LlamaParse Agentic Plus** as a reference. Benchmark scores come from the
-[ParseBench](https://github.com/run-llama/ParseBench) leaderboard; additional methods use their
-official model cards for parameter counts and licenses and have no benchmark score assigned.
+**LlamaParse Agentic Plus** as an optional reference. The selection lists 24 implemented
+methods, grouped roughly from larger models to compact pipelines and lightweight tools.
+Each method highlights its strengths and use cases based on its model card and the preset implemented here.
+Parameter counts and licenses come from the official model cards and project documentation.
 
-| Model | Publisher | Params | ParseBench | License | In the arena |
-| --- | --- | --- | --- | --- | --- |
-| LlamaParse Agentic Plus (reference) | LlamaIndex | Hosted API | 86.7 | Commercial API | yes (needs an API key) |
-| rakedoc-nano | CloudRaker | 1.2B | 77.2 | AGPL-3.0 | yes |
-| Aeddix Alpine OCR | Aeddix Labs | 1.2B | 76.8 | Apache-2.0 | yes |
-| florin-parser-nano | Florin | 1.2B | 76.7 | AGPL-3.0 | yes |
-| Nemotron SkyVision CPU | NVIDIA / SkyContact | 0.631B | not benchmarked | OpenMDW-1.1 | yes, CPU / F16 GGUF |
-| LightOnOCR-3-0.8B | LightOn | 0.8B class | 74.7 | Apache-2.0 | yes, AMD Vulkan / NVIDIA CUDA |
-| OvisOCR3 | ATH-MaaS | 0.85B | 71.8 | Apache-2.0 | yes, AMD Vulkan / NVIDIA CUDA |
-| MinerU2.5-Pro-2605 | OpenDataLab | 1.2B | 69.3 | Apache-2.0 (weights) | yes |
-| Infinity-Parser2-Flash | inftech.ai / infly | ≈2B | 68.6 | Apache-2.0 | yes, AMD Vulkan / NVIDIA CUDA |
-| Surya OCR 2 | Datalab | 0.69B | 60.6 | OpenRAIL-M (weights) | coming soon |
-| TeleOCR | StarDoc-AI | 1.4B | 57.5 | Apache-2.0 | coming soon |
-| Unlimited-OCR 2 | Baidu | 3.3B | 57.2 | MIT | yes, local multi-page Vulkan / CUDA |
-| Docling Standard | IBM / LF AI & Data | ≈0.3B | 50.7 | MIT, Apache-2.0 / CDLA | yes, CPU |
-| Granite Docling 258M | IBM Research | 258M | not benchmarked | Apache-2.0 | yes, local GPU/CPU |
-| PaddleOCR Tiny | PaddlePaddle | 1.5M | not benchmarked | Apache-2.0 | yes, local GPU/CPU |
-| PaddleOCR Small | PaddlePaddle | 7.7M | not benchmarked | Apache-2.0 | yes, local GPU/CPU |
-| PaddleOCR Medium | PaddlePaddle | 34.5M | not benchmarked | Apache-2.0 | yes, local GPU/CPU |
-| GLM-OCR 0.9B | Z.ai | 0.9B | not benchmarked | MIT | yes, local GPU/CPU |
-| pypdf | py-pdf | no model | 14.9 | BSD-3-Clause | yes, CPU |
-| Tesseract | Tesseract OCR | classic OCR | not benchmarked | Apache-2.0 | yes, CPU¹ |
+| Model | Approximate size | Strengths & use cases | License |
+| --- | --- | --- | --- |
+| LlamaParse Agentic Plus (optional reference API) | Hosted API | Complex tables & charts; judging reference | Commercial API |
+| Unlimited-OCR 2 | 3.3B | Reads multiple pages together with shared context | MIT |
+| Infinity-Parser2-Flash | ≈2B | Chart data as tables & scientific page layouts | Apache-2.0 |
+| rakedoc-nano | 1.2B | Merged cells & complex table headers | AGPL-3.0 |
+| Aeddix Alpine OCR | 1.2B | Tables & inline text formatting | Apache-2.0 |
+| florin-parser-nano | 1.2B | Preserves bold, strikethrough & superscripts | AGPL-3.0 |
+| MinerU2.5-Pro-2605 | 1.2B | Formulas, charts & technical diagrams | Apache-2.0 (weights) |
+| GLM-OCR 0.9B | 900M | Compact full-page text recognition | MIT |
+| OvisOCR3 | 850M | Joins tables across pages & extracts chart data | Apache-2.0 |
+| LightOnOCR-3-0.8B | 800M | Charts & page layout in one pass | Apache-2.0 |
+| Marker Balanced | ≈689M + auxiliaries | Scanned pages, tables & inline math | GPL-3.0 (code), OpenRAIL (Surya weights) |
+| Nemotron SkyVision CPU | 631M | Structured document extraction on CPU | OpenMDW-1.1 |
+| Docling Standard | ≈300M | Reading order, page structure & tables | MIT (code), Apache-2.0 / CDLA (models) |
+| OpenDataLoader Docling | Backend-dependent | Mixed digital/scanned PDFs with German/English OCR | Apache-2.0 (code), model-specific weights |
+| Granite Docling 258M | 258M | Tables, equations & page structure in a compact model | Apache-2.0 |
+| docTR Large transformer | ≈110.6M | Accuracy-focused text recognition | Apache-2.0 |
+| PaddleOCR Medium | 34.5M | Multilingual, screen & scene text | Apache-2.0 |
+| docTR default | ≈26.4M | Balanced OCR for printed documents | Apache-2.0 |
+| Marker Fast | ≈20M + auxiliaries | Digital PDFs; embedded text, no OCR | GPL-3.0 (code), model-specific weights |
+| PaddleOCR Small | 7.7M | Lightweight multilingual text OCR | Apache-2.0 |
+| docTR compact | ≈6.3M | Text detection & recognition with low compute needs | Apache-2.0 |
+| PaddleOCR Tiny | 1.5M | Tiny multilingual text OCR | Apache-2.0 |
+| pypdf | No model | Embedded PDF text; no OCR | BSD-3-Clause |
+| Tesseract¹ | Classic OCR (LSTM) | Clean scans of printed text | Apache-2.0 |
+| OpenDataLoader Core | No neural model | Digital PDF structure; no OCR | Apache-2.0 |
 
-¹ Needs the Tesseract program (Windows: `winget install UB-Mannheim.TesseractOCR`). ParseBench
-has a Tesseract pipeline but no leaderboard score for it.
+Pipeline sizes are approximate and may exclude auxiliary models. OpenDataLoader Docling
+is listed beside Docling Standard because its total depends on the backend configuration.
+These specialties describe useful applications, not a quality ranking.
+
+¹ Needs the Tesseract program (Windows: `winget install UB-Mannheim.TesseractOCR`).
 
 Nemotron-3.5-Parse and Falcon-OCR have been removed from the active catalog. Saved
 results retain their model names. Nemotron SkyVision CPU remains available.
 
-The table below describes each local pipeline. ParseBench scores refer to the benchmark's
-configuration; local implementations can differ, as noted for Docling Standard.
+The table below describes each local pipeline. Some implementations derive from
+[ParseBench](https://github.com/run-llama/ParseBench); local settings are documented below.
 
 | Model | Pipeline | Pages rendered at |
 | --- | --- | --- |
@@ -47,7 +56,7 @@ configuration; local implementations can differ, as noted for Docling Standard.
 | LightOnOCR-3-0.8B | One pass with the `grounding` prompt | 400 DPI, at most 5 MP |
 | MinerU2.5-Pro-2605 | `mineru-vl-utils` two-step extraction with image analysis | 150 DPI |
 | Infinity-Parser2-Flash | `doc2json`, then each figure re-read as a markdown table | 300 DPI |
-| OvisOCR3 | Model card's structured JSON prompt per page, then the chart prompt per chart | 200 DPI |
+| OvisOCR3 | Structured pages, chart reading, then recursive cross-page table reconstruction | 200 DPI |
 | Docling Standard | Docling's default PDF pipeline on the CPU (ParseBench used a private Docling server, so its settings may differ) | original file |
 | Granite Docling 258M | Docling VLM pipeline with the pinned IBM checkpoint; greedy DocTags generation, then Markdown and layout export | original file, Docling scale 2 (144 DPI for PDF) |
 | pypdf | `page.extract_text()`, no OCR | original file |
@@ -58,6 +67,32 @@ configuration; local implementations can differ, as noted for Docling Standard.
 
 Post-processing code from ParseBench (Apache-2.0) is vendored in `backend/app/engines/vendor` and
 `backend/app/engines/kdl`.
+
+**OvisOCR3 cross-page tables** are enabled by default. After page parsing, the same model
+checks adjacent selected pages containing tables, working backwards through multi-page
+chains. Modified pages are re-rendered before the next merge, following the
+[pinned upstream workflow](https://huggingface.co/ATH-MaaS/OvisOCR3/blob/17f255e2c8ae6d18d5d5edb0a474bd4ed39aef90/document_crosspage.py)
+(Apache-2.0; vendored with explicit UTF-8 text I/O for Windows).
+Whole-document view and Markdown downloads contain joined tables. Individual page
+outputs, layout boxes and page-level judging retain the original extraction, with
+collapsible joined-table previews and source-page numbers. The total parsing time includes
+reconstruction; individual page timings cover page extraction only. Saved runs are not
+reprocessed automatically; start a new Ovis run to use this feature.
+
+The conservative upstream binding joins the last table on the earlier page with the first
+table on the next page. Skipped page numbers, incomplete page JSON and chart-derived data
+tables are excluded. Ambiguous multiple merges at one boundary and malformed responses
+are retained as diagnostics instead of overwriting page OCR. Failures in this optional
+stage leave completed page extractions available and appear in the results panel.
+
+For chains of three or more pages, install the browser after installing backend dependencies:
+`backend/.venv/Scripts/python.exe -m playwright install chromium` on Windows, or
+`backend/.venv/bin/python -m playwright install --with-deps chromium` on Linux.
+An installed Windows Chrome is also detected; `OVISOCR3_BROWSER_EXECUTABLE` can specify
+another Chromium executable. The pinned local MathJax renderer is downloaded from the
+model repository on first use; document rendering blocks network requests. Remote vLLM
+servers need to accept two images per request (`--limit-mm-per-prompt '{"image":2}'`).
+Set `OVISOCR3_CROSSPAGE_TABLES=false` to reproduce the original page-only pipeline.
 
 **Docling Standard** retains the existing `docling` model ID, so saved experiments still work.
 **Granite Docling 258M** (`granite-docling-258m`) uses the separate VLM pipeline and reads page
@@ -419,7 +454,7 @@ The frontend uses only this JSON API, so other clients can use it too:
 | Method & path | Purpose |
 | --- | --- |
 | `GET /api/health` | Status, LlamaParse configured, local accelerator, limits |
-| `GET /api/models` | Catalog with ParseBench scores and per-model availability |
+| `GET /api/models` | Catalog with sizes, specialties and per-model availability (legacy benchmark metadata retained) |
 | `POST /api/documents` | Upload (`multipart/form-data`, field `file`) |
 | `POST /api/documents/sample` | Add the bundled sample report |
 | `GET /api/documents/{id}/file`, `/thumbnail`, `/pages/{n}` | Original, thumbnail, page render |
@@ -467,8 +502,7 @@ only when no supported GPU is available. They output plain text and word boundin
 table cells are not reconstructed. Marker exports Markdown/layout boxes;
 OpenDataLoader exports Markdown/JSON with normalized layout boxes. Selected page
 numbers, timings, exact preset configuration and package versions are saved with
-each result. These exact presets have no published ParseBench scores, so the
-leaderboard score stays empty. Sizes exclude auxiliary components where noted.
+each result. Sizes exclude auxiliary components where noted.
 
 On Windows ROCm, docTR's batch-normalization and LSTM layers use PyTorch's native
 GPU kernels to work around MIOpen's missing `type_traits` HIPRTC compile error.

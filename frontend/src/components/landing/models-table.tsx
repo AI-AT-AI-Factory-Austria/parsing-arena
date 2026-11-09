@@ -1,17 +1,9 @@
 import clsx from "clsx";
 import { ArrowUpRight, ServerOff } from "lucide-react";
-import { formatScore } from "@/lib/format";
+import { modelSizeLabel, sortModelsBySize } from "@/lib/model-presentation";
 import { getModels } from "@/lib/server-api";
-import type { ArenaModel, Scores } from "@/lib/types";
+import type { ArenaModel } from "@/lib/types";
 import { Chip, Dot } from "@/components/ui";
-
-const DIMENSIONS: { key: keyof Omit<Scores, "overall">; label: string }[] = [
-  { key: "tables", label: "Tables" },
-  { key: "charts", label: "Charts" },
-  { key: "content", label: "Content" },
-  { key: "formatting", label: "Formatting" },
-  { key: "grounding", label: "Grounding" },
-];
 
 const BACKEND_LABEL: Record<string, string> = {
   local: "Runs locally",
@@ -22,9 +14,6 @@ const BACKEND_LABEL: Record<string, string> = {
 
 function StatusCell({ model }: { model: ArenaModel }) {
   const { availability } = model;
-  if (model.kind === "open" && !model.implemented) {
-    return <Chip tone="outline">Coming soon</Chip>;
-  }
   if (!availability.runnable) {
     return (
       <Chip tone="amber" title={availability.reason ?? undefined}>
@@ -33,12 +22,10 @@ function StatusCell({ model }: { model: ArenaModel }) {
     );
   }
   return (
-    <div className="flex flex-col items-start gap-1">
-      <Chip tone="mint">
-        <Dot /> In arena
-      </Chip>
+    <div className="flex flex-col items-start gap-1.5">
+      <Chip tone="mint"><Dot /> In arena</Chip>
       {availability.backend && (
-        <span className="pl-1 text-[11px] text-faint">
+        <span className="text-[11px] text-faint">
           {availability.runtime_label ?? BACKEND_LABEL[availability.backend]}
         </span>
       )}
@@ -46,83 +33,35 @@ function StatusCell({ model }: { model: ArenaModel }) {
   );
 }
 
-function ScoreBar({ value, reference }: { value: number; reference?: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-10 text-right font-mono text-[15px] font-medium tabular-nums text-ink">
-        {formatScore(value)}
-      </span>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-fog">
-        <div
-          className={clsx("h-full rounded-full", reference ? "bg-leaf" : "bg-brand")}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ModelRow({ model, rank }: { model: ArenaModel; rank: number | null }) {
+function ModelRow({ model }: { model: ArenaModel }) {
   const reference = model.kind === "reference";
   return (
-    <tr
-      className={clsx(
-        "group border-t border-line align-top transition-colors",
-        reference ? "bg-mint-wash" : "hover:bg-smoke/70",
-      )}
-    >
-      <td className="py-4 pl-5 pr-2 font-mono text-xs text-faint tabular-nums sm:pl-6">
-        {reference ? "Ref" : (rank ?? "–")}
-      </td>
-      <td className="min-w-[17rem] py-4 pr-6">
+    <tr className={clsx(
+      "group border-t border-line align-top transition-colors",
+      reference ? "bg-mint-wash" : "hover:bg-smoke/70",
+    )}>
+      <th scope="row" className="py-5 pl-5 pr-5 font-normal sm:pl-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {model.hf_url ? (
-            <a
-              href={model.hf_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-ink hover:text-brand"
-            >
+            <a href={model.hf_url} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-ink hover:text-brand">
               {model.name}
-              <ArrowUpRight aria-hidden className="size-3.5 text-stone group-hover:text-brand" />
+              <ArrowUpRight aria-hidden className="size-3.5 shrink-0 text-stone group-hover:text-brand" />
               <span className="sr-only">(Hugging Face model card)</span>
             </a>
-          ) : (
-            <span className="whitespace-nowrap font-medium text-ink">{model.name}</span>
-          )}
+          ) : <span className="font-medium text-ink">{model.name}</span>}
           {reference && <Chip tone="mint">Reference</Chip>}
         </div>
-        {model.lineage && (
-          <p title={model.lineage} className="mt-1 max-w-[19rem] truncate text-xs text-faint">
-            {model.lineage}
-          </p>
-        )}
+        <p className="mt-1 text-xs text-faint">{model.publisher}</p>
+      </th>
+      <td className="py-5 pr-5">
+        <span title={"Parameters: " + model.params} className="inline-block whitespace-nowrap rounded-md border border-line bg-white px-2 py-1 font-mono text-xs tabular-nums text-muted">
+          {modelSizeLabel(model)}
+        </span>
       </td>
-      <td className="whitespace-nowrap py-4 pr-6 text-sm text-body">{model.publisher}</td>
-      <td className="whitespace-nowrap py-4 pr-6 font-mono text-sm tabular-nums text-body">
-        {model.params}
-      </td>
-      <td className="py-4 pr-6">
-        {model.scores ? (
-          <ScoreBar value={model.scores.overall} reference={reference} />
-        ) : (
-          <span className="text-xs text-faint" title="Not on the ParseBench leaderboard">
-            Not benchmarked
-          </span>
-        )}
-      </td>
-      {DIMENSIONS.map((d) => (
-        <td
-          key={d.key}
-          className="hidden py-4 pr-4 text-right font-mono text-[13px] tabular-nums text-muted xl:table-cell"
-        >
-          {model.scores ? formatScore(model.scores[d.key]) : "–"}
-        </td>
-      ))}
-      <td className="whitespace-nowrap py-4 pr-6 text-sm text-body">{model.license}</td>
-      <td className="py-4 pr-5 sm:pr-6">
-        <StatusCell model={model} />
-      </td>
+      <td className="py-5 pr-6 text-sm leading-6 text-body">{model.specialty}</td>
+      <td className="hidden py-5 pr-5 text-xs leading-5 text-muted xl:table-cell">{model.license}</td>
+      <td className="py-5 pr-5 sm:pr-6"><StatusCell model={model} /></td>
     </tr>
   );
 }
@@ -142,55 +81,23 @@ export async function ModelsTable() {
       </div>
     );
   }
-  const open = [...data.models].sort(
-    (a, b) => (b.scores?.overall ?? -1) - (a.scores?.overall ?? -1),
-  );
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] border-collapse text-left">
-          <caption className="sr-only">
-            Open OCR models in the arena with their ParseBench scores
-          </caption>
+        <table className="w-full min-w-[740px] border-collapse text-left">
+          <caption className="sr-only">OCR methods, ordered by approximate model size, with their strengths and runtime</caption>
           <thead>
             <tr className="eyebrow text-[11px]">
-              <th scope="col" className="py-3.5 pl-5 pr-2 font-normal sm:pl-6">
-                #
-              </th>
-              <th scope="col" className="py-3.5 pr-6 font-normal">
-                Model
-              </th>
-              <th scope="col" className="py-3.5 pr-6 font-normal">
-                Publisher
-              </th>
-              <th scope="col" className="py-3.5 pr-6 font-normal">
-                Params
-              </th>
-              <th scope="col" className="py-3.5 pr-6 font-normal">
-                ParseBench
-              </th>
-              {DIMENSIONS.map((d) => (
-                <th
-                  key={d.key}
-                  scope="col"
-                  className="hidden py-3.5 pr-4 text-right font-normal xl:table-cell"
-                >
-                  {d.label}
-                </th>
-              ))}
-              <th scope="col" className="py-3.5 pr-6 font-normal">
-                License
-              </th>
-              <th scope="col" className="py-3.5 pr-5 font-normal sm:pr-6">
-                Status
-              </th>
+              <th scope="col" className="w-[28%] py-3.5 pl-5 pr-5 font-normal sm:pl-6">Model</th>
+              <th scope="col" className="py-3.5 pr-5 font-normal">Size</th>
+              <th scope="col" className="w-[30%] py-3.5 pr-6 font-normal">Strengths</th>
+              <th scope="col" className="hidden py-3.5 pr-5 font-normal xl:table-cell">License</th>
+              <th scope="col" className="py-3.5 pr-5 font-normal sm:pr-6">Runtime</th>
             </tr>
           </thead>
           <tbody>
-            <ModelRow model={data.reference} rank={null} />
-            {open.map((model, i) => (
-              <ModelRow key={model.id} model={model} rank={model.scores ? i + 1 : null} />
-            ))}
+            <ModelRow model={data.reference} />
+            {sortModelsBySize(data.models).map((model) => <ModelRow key={model.id} model={model} />)}
           </tbody>
         </table>
       </div>
@@ -204,11 +111,9 @@ export function ModelsTableSkeleton() {
       <div className="space-y-5">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="flex animate-pulse items-center gap-6">
-            <div className="h-3 w-6 rounded bg-fog" />
             <div className="h-3 w-48 rounded bg-fog" />
-            <div className="h-3 w-24 rounded bg-fog" />
-            <div className="h-3 w-12 rounded bg-fog" />
-            <div className="h-3 w-40 rounded bg-fog" />
+            <div className="h-3 w-16 rounded bg-fog" />
+            <div className="h-3 w-64 rounded bg-fog" />
             <div className="ml-auto h-5 w-20 rounded-full bg-fog" />
           </div>
         ))}

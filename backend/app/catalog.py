@@ -38,6 +38,7 @@ class ArenaModel:
     verified: bool = True
     lineage: str = ""
     pipeline: str = ""
+    specialty: str = ""
     links: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -48,6 +49,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="rakedoc-nano",
         name="rakedoc-nano",
+        specialty="Merged cells & complex table headers",
         publisher="CloudRaker",
         params="1.2B",
         params_b=1.2,
@@ -62,6 +64,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="aeddix-alpine-ocr",
         name="Aeddix Alpine OCR",
+        specialty="Tables & inline text formatting",
         publisher="Aeddix Labs",
         params="1.2B",
         params_b=1.2,
@@ -77,6 +80,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="florin-parser-nano",
         name="florin-parser-nano",
+        specialty="Preserves bold, strikethrough & superscripts",
         publisher="Florin",
         params="1.2B",
         params_b=1.2,
@@ -106,6 +110,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="nemotron-skyvision-cpu",
         name="Nemotron SkyVision CPU",
+        specialty="Structured document extraction on CPU",
         publisher="NVIDIA / SkyContact",
         params="0.631B",
         params_b=0.631,
@@ -122,6 +127,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="lightonocr-3-0.8b",
         name="LightOnOCR-3-0.8B",
+        specialty="Charts & page layout in one pass",
         publisher="LightOn",
         params="0.8B class",
         params_b=0.8,
@@ -136,6 +142,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="mineru2.5-pro-2605",
         name="MinerU2.5-Pro-2605",
+        specialty="Formulas, charts & technical diagrams",
         publisher="OpenDataLab",
         params="1.2B",
         params_b=1.2,
@@ -150,6 +157,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="infinity-parser2-flash",
         name="Infinity-Parser2-Flash",
+        specialty="Chart data as tables & scientific page layouts",
         publisher="inftech.ai / infly",
         params="≈2B",
         params_b=2.0,
@@ -165,6 +173,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="pypdf",
         name="pypdf",
+        specialty="Embedded PDF text · no OCR",
         publisher="py-pdf (open source)",
         params="No model",
         params_b=0.0,
@@ -179,6 +188,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="tesseract",
         name="Tesseract",
+        specialty="Clean scans of printed text",
         publisher="Tesseract OCR (open source)",
         params="Classic OCR (LSTM)",
         params_b=0.0,
@@ -192,6 +202,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="docling",
         name="Docling Standard",
+        specialty="Reading order, page structure & tables",
         publisher="IBM / LF AI & Data",
         params="≈0.3B (layout + TableFormer)",
         params_b=0.3,
@@ -206,6 +217,7 @@ MODELS: list[ArenaModel] = [
     ArenaModel(
         id="granite-docling-258m",
         name="Granite Docling 258M",
+        specialty="Tables, equations & page structure in a compact model",
         publisher="IBM Research",
         params="258M",
         params_b=0.258,
@@ -233,18 +245,9 @@ MODELS: list[ArenaModel] = [
         pipeline="generate_with_layout: layout detection, then OCR per region",
     ),
     ArenaModel(
-        id="surya-ocr-2",
-        name="Surya OCR 2",
-        publisher="Datalab",
-        params="0.69B",
-        params_b=0.69,
-        license="OpenRAIL-M (weights)",
-        scores=Scores(60.63, 82.74, 19.04, 87.84, 63.59, 49.93),
-        hf_repo="datalab-to/surya-ocr-2",
-    ),
-    ArenaModel(
         id="ovisocr3",
         name="OvisOCR3",
+        specialty="Joins tables across pages & extracts chart data",
         publisher="ATH-MaaS",
         params="0.85B",
         params_b=0.85,
@@ -255,21 +258,12 @@ MODELS: list[ArenaModel] = [
         revision="17f255e2c8ae6d18d5d5edb0a474bd4ed39aef90",
         verified=False,
         lineage="Built on Qwen3.5-0.8B",
-        pipeline="Structured JSON parse per page, then a chart-reading pass per chart",
-    ),
-    ArenaModel(
-        id="teleocr",
-        name="TeleOCR",
-        publisher="StarDoc-AI",
-        params="1.4B",
-        params_b=1.4,
-        license="Apache-2.0",
-        scores=Scores(57.52, 72.77, 9.97, 84.59, 45.74, 74.55),
-        hf_repo="StarDoc-AI/TeleOCR",
+        pipeline="Structured pages and chart reading, then cross-page table reconstruction",
     ),
     ArenaModel(
         id="unlimited-ocr-2",
         name="Unlimited-OCR 2",
+        specialty="Reads multiple pages together with shared context",
         publisher="Baidu",
         params="3.3B",
         params_b=3.3,
@@ -296,6 +290,7 @@ MODELS.extend(
         ArenaModel(
             id="marker_fast",
             name="Marker Fast",
+            specialty="Digital PDFs · embedded text, no OCR",
             publisher="Datalab",
             params="≈20M layout + auxiliaries",
             params_b=0.020,
@@ -309,6 +304,7 @@ MODELS.extend(
         ArenaModel(
             id="marker_balanced",
             name="Marker Balanced",
+            specialty="Scanned pages, tables & inline math",
             publisher="Datalab",
             params="≈689M Surya + auxiliaries",
             params_b=0.689,
@@ -323,6 +319,7 @@ MODELS.extend(
         ArenaModel(
             id="opendataloader_core",
             name="OpenDataLoader Core",
+            specialty="Digital PDF structure · no OCR",
             publisher="OpenDataLoader",
             params="0 neural parameters",
             params_b=0,
@@ -336,6 +333,7 @@ MODELS.extend(
         ArenaModel(
             id="opendataloader_docling",
             name="OpenDataLoader Docling",
+            specialty="Mixed digital/scanned PDFs with German/English OCR",
             publisher="OpenDataLoader",
             params="Backend-dependent",
             params_b=None,
@@ -352,6 +350,7 @@ MODELS.extend(
         ArenaModel(
             id="doctr_compact",
             name="docTR compact",
+            specialty="Text detection & recognition with low compute needs",
             publisher="Mindee",
             params="≈6.3M",
             params_b=0.0063,
@@ -367,6 +366,7 @@ MODELS.extend(
         ArenaModel(
             id="doctr_default",
             name="docTR default",
+            specialty="Balanced OCR for printed documents",
             publisher="Mindee",
             params="≈26.4M at inference",
             params_b=0.0264,
@@ -380,6 +380,7 @@ MODELS.extend(
         ArenaModel(
             id="doctr_large_transformer",
             name="docTR Large transformer",
+            specialty="Accuracy-focused text recognition",
             publisher="Mindee",
             params="≈110.6M",
             params_b=0.1106,
@@ -398,6 +399,11 @@ MODELS.extend(
     ArenaModel(
         id=f"paddleocr_{tier}",
         name=f"PaddleOCR {tier.title()}",
+        specialty={
+            "tiny": "Tiny multilingual text OCR",
+            "small": "Lightweight multilingual text OCR",
+            "medium": "Multilingual, screen & scene text",
+        }[tier],
         publisher="PaddlePaddle",
         params=size,
         params_b=billions,
@@ -426,6 +432,7 @@ MODELS.append(
     ArenaModel(
         id="glm-ocr",
         name="GLM-OCR 0.9B",
+        specialty="Compact full-page text recognition",
         publisher="Z.ai",
         params="0.9B",
         params_b=0.9,
@@ -443,6 +450,7 @@ MODELS.append(
 REFERENCE = ArenaModel(
     id=LLAMAPARSE_ID,
     name="LlamaParse Agentic Plus",
+    specialty="Complex tables & charts · judging reference",
     publisher="LlamaIndex",
     params="Hosted API",
     params_b=None,

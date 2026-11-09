@@ -47,6 +47,7 @@ class ModelOut(BaseModel):
     verified: bool
     lineage: str
     pipeline: str
+    specialty: str
     scores: ScoresOut | None
     availability: AvailabilityOut
 

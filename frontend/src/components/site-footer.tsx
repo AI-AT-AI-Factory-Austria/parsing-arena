@@ -20,16 +20,7 @@ export function SiteFooter() {
           </p>
         </div>
         <p className="text-faint">
-          Scores from the{" "}
-          <a
-            href="https://github.com/run-llama/ParseBench"
-            className="underline decoration-ash underline-offset-2 hover:text-ink"
-            target="_blank"
-            rel="noreferrer"
-          >
-            ParseBench leaderboard
-          </a>{" "}
-          · Reference parser: LlamaParse Agentic Plus
+          Optional reference: LlamaParse Agentic Plus
         </p>
       </div>
     </footer>

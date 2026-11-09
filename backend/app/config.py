@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     infinity_parser2_flash_served_model: str = "infly/Infinity-Parser2-Flash"
     ovisocr3_endpoint_url: str = ""
     ovisocr3_served_model: str = "ovisocr3"
+    ovisocr3_crosspage_tables: bool = True
+    ovisocr3_browser_executable: str = ""
 
     # Tesseract: path to the tesseract executable (empty = PATH or the default
     # Windows install folder) and its language codes, e.g. "deu+eng".

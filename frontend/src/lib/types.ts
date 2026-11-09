@@ -31,6 +31,7 @@ export type ArenaModel = {
   verified: boolean;
   lineage: string;
   pipeline: string;
+  specialty: string;
   /** null for models that are not on the ParseBench leaderboard. */
   scores: Scores | null;
   availability: Availability;
@@ -81,7 +82,10 @@ export type RunStatus = "queued" | "loading" | "running" | "completed" | "failed
 export type ExperimentStatus = "queued" | "running" | "completed" | "failed";
 
 export type RunProgress = {
-  phase?: "queued" | "loading" | "uploading" | "parsing" | "document" | "layout" | "recognition" | "done";
+  phase?: "queued" | "loading" | "uploading" | "parsing" | "document" | "layout" | "recognition" | "reconstructing" | "done";
+  pair_pages?: number[];
+  pairs_done?: number;
+  pairs_total?: number;
   page?: number;
   page_index?: number;
   regions_done?: number;
@@ -92,6 +96,14 @@ export type RunProgress = {
 };
 
 export type RunMeta = {
+  cross_page_tables?: { source_pages: number[]; html: string }[];
+  cross_page_reconstruction?: {
+    status: "completed" | "partial" | "not_needed" | "disabled";
+    pairs_checked?: number;
+    pairs_total?: number;
+    seconds?: number;
+    issues?: { source_pages: number[]; message: string }[];
+  };
   backend?: string;
   device_name?: string;
   runtime?: string;

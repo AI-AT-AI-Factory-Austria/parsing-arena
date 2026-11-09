@@ -8,6 +8,7 @@ import { Markdown } from "@/components/markdown";
 import { Chip, ProgressBar, Spinner } from "@/components/ui";
 import { runFraction, runPhaseText } from "./run-progress";
 import { JudgmentFeedback } from "./judgment";
+import { CrossPageTables } from "./cross-page-tables";
 
 export type PageChoice = number | "all";
 export type ViewMode = "rendered" | "markdown";
@@ -160,6 +161,7 @@ export function OutputPanel({
       />
 
       <div key={`output:${contentKey}`} className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        {run.status === "completed" && <CrossPageTables run={run} page={page} view={view} onSelectPage={onSelectPage} />}
         {run.status === "failed" && (
           <div className="flex items-start gap-2.5 rounded-2xl bg-danger-wash p-4 text-sm text-danger">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />

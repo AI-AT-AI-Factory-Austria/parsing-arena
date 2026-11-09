@@ -1,30 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { ArrowRight, Check, Cpu, ExternalLink, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { fileKind, formatBytes, formatScore, parsePageSelection, pluralize } from "@/lib/format";
+import { fileKind, formatBytes, parsePageSelection, pluralize } from "@/lib/format";
 import { usePolling } from "@/lib/use-polling";
 import type { ArenaModel, DocumentInfo, Health, ModelsResponse } from "@/lib/types";
 import { Chip, Spinner } from "@/components/ui";
 import { ACCEPT, Dropzone, validateFile } from "./dropzone";
 import { SampleGallery } from "./sample-gallery";
+import { ModelPicker } from "./model-picker";
 
 type Catalog = { models: ModelsResponse; health: Health };
-
-function backendLabel(model: ArenaModel, health: Health): string {
-  const backend = model.availability.backend;
-  if (backend === "api") return "Hosted API";
-  if (backend === "endpoint") return "vLLM endpoint";
-  if (model.availability.runtime_label) return model.availability.runtime_label;
-  if (backend === "cpu") return "CPU";
-  const device = health.local_device;
-  if (device?.available && device.device !== "cpu") return "Local GPU";
-  return "Local CPU";
-}
 
 export function ArenaWorkspace() {
   const router = useRouter();
@@ -54,7 +43,6 @@ export function ArenaWorkspace() {
   const choices: ArenaModel[] = data
     ? [...data.models.models.filter((m) => m.implemented), data.models.reference]
     : [];
-  const comingSoon = data ? data.models.models.filter((m) => !m.implemented) : [];
   const selected =
     selection ??
     choices.filter((m) => m.availability.runnable && m.kind === "open").map((m) => m.id);
@@ -157,7 +145,7 @@ export function ArenaWorkspace() {
   };
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,1fr)]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       {/* Document */}
       <section aria-labelledby="doc-heading" className="space-y-3">
         <h2 id="doc-heading" className="sr-only">
@@ -318,84 +306,12 @@ export function ArenaWorkspace() {
             </div>
           )}
           {data && (
-            <ul className="mt-3 space-y-2">
-              {choices.filter((model) => model.kind !== "reference").map((model) => {
-                const runnable = model.availability.runnable;
-                const checked = runnable && selected.includes(model.id);
-                return (
-                  <li key={model.id}>
-                    <label
-                      className={clsx(
-                        "flex gap-3 rounded-2xl border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand",
-                        !runnable
-                          ? "cursor-not-allowed border-line bg-smoke"
-                          : checked
-                            ? "cursor-pointer border-brand bg-brand-wash"
-                            : "cursor-pointer border-line hover:border-ash",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="peer sr-only"
-                        checked={checked}
-                        disabled={!runnable}
-                        onChange={() => toggle(model.id)}
-                      />
-                      <span
-                        aria-hidden
-                        className={clsx(
-                          "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border transition-colors",
-                          checked ? "border-brand bg-brand text-white" : "border-ash bg-white",
-                        )}
-                      >
-                        {checked && <Check className="size-3.5" strokeWidth={3} />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="truncate font-medium">{model.name}</span>
-                          </span>
-                          <span
-                            className="shrink-0 font-mono text-sm tabular-nums text-muted"
-                            title="ParseBench overall score"
-                          >
-                            {model.scores ? formatScore(model.scores.overall) : "–"}
-                          </span>
-                        </span>
-                        <span className="mt-0.5 block text-xs text-faint">
-                          {`${model.publisher} · ${model.params} · ${backendLabel(model, data.health)}`}
-                        </span>
-                        {(model.id === "marker_fast" || model.id === "opendataloader_core") && (
-                          <span className="mt-1 block text-xs text-muted">
-                            Embedded PDF text only · No OCR on scanned pages
-                          </span>
-                        )}
-                        {model.id === "unlimited-ocr-2" && (
-                          <span className="mt-1 block text-xs text-muted">
-                            Reads up to {model.availability.max_pages ?? 16} pages together. This local
-                            runtime does not provide the optimized long-document memory savings.
-                          </span>
-                        )}
-                        {!runnable && model.availability.reason && (
-                          <span className="mt-1.5 block text-xs text-amber">
-                            {model.availability.reason}
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {comingSoon.length > 0 && (
-            <p className="mt-3 text-xs text-faint">
-              {pluralize(comingSoon.length, "more model")} coming soon:{" "}
-              {comingSoon.map((m) => m.name).join(", ")}.{" "}
-              <Link href="/#models" className="underline underline-offset-2 hover:text-ink">
-                See the line-up
-              </Link>
-            </p>
+            <ModelPicker
+              models={choices.filter((model) => model.kind !== "reference")}
+              health={data.health}
+              selected={selected}
+              onToggle={toggle}
+            />
           )}
         </fieldset>
 

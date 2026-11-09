@@ -212,6 +212,8 @@ class LlamaCppRuntime:
         }
 
     def _complete(self, payload: dict) -> str:
+        payload = dict(payload)
+        require_complete = payload.pop("arena_require_complete", False)
         if not self.loaded:
             raise RuntimeError("The local model server is not running.")
         assert self.client
@@ -230,6 +232,8 @@ class LlamaCppRuntime:
         )
         response.raise_for_status()
         choice = response.json()["choices"][0]
+        if require_complete and choice.get("finish_reason") != "stop":
+            raise RuntimeError("Table reconstruction did not finish; page OCR was retained.")
         if choice.get("finish_reason") == "length":
             raise RuntimeError(
                 "The model reached its output limit before finishing the extraction."

@@ -21,7 +21,9 @@ def test_models_catalog(client):
     body = client.get("/api/models").json()
     ids = [m["id"] for m in body["models"]]
     assert ids[:2] == ["rakedoc-nano", "aeddix-alpine-ocr"]
-    assert len(ids) == 26
+    assert len(ids) == 24
+    assert "surya-ocr-2" not in ids and "teleocr" not in ids
+    assert all(m["implemented"] and m["specialty"] for m in body["models"])
     assert "nemotron-3.5-parse" not in ids and "falcon-ocr" not in ids
     by_id = {m["id"]: m for m in body["models"]}
     assert by_id["nemotron-skyvision-cpu"]["name"] == "Nemotron SkyVision CPU"

@@ -90,7 +90,7 @@ export default function HomePage() {
             <dl className="mt-10 grid max-w-2xl grid-cols-3 gap-6 border-t border-ash/70 pt-6">
               <div>
                 <dt className="eyebrow text-[11px]">Line-up</dt>
-                <dd className="mt-1 text-2xl tracking-tight">26 open parsers</dd>
+                <dd className="mt-1 text-2xl tracking-tight">24 open parsers</dd>
               </div>
               <div>
                 <dt className="eyebrow text-[11px]">Compared on</dt>
@@ -173,9 +173,8 @@ export default function HomePage() {
               </h2>
             </div>
             <p className="max-w-xl leading-relaxed text-muted">
-              Scores from the ParseBench leaderboard (0–100, higher is better). The overall score
-              averages five dimensions: tables, charts, content faithfulness, formatting and visual
-              grounding.
+              From multi-page document models to lightweight text extraction. Explore each
+              method&apos;s focus, ordered roughly by size, and try the ones that fit your documents.
             </p>
           </div>
           <div className="mt-10">
@@ -184,9 +183,9 @@ export default function HomePage() {
             </Suspense>
           </div>
           <p className="mt-5 text-sm text-faint">
-            Each model uses its own extraction pipeline, page resolution and settings. ParseBench
-            scores describe the benchmark configuration; local settings can differ. Methods
-            without a published score are available for comparison on your own documents.
+            M / B = million / billion parameters. Pipeline sizes are approximate; + indicates
+            auxiliary models. Each method uses its own extraction settings. Compare the results
+            on your documents to find the best fit.
           </p>
         </div>
       </section>
