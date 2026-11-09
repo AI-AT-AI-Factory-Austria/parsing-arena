@@ -7,6 +7,7 @@ import type { ArenaModel, RunDetail } from "@/lib/types";
 import { Markdown } from "@/components/markdown";
 import { Chip, ProgressBar, Spinner } from "@/components/ui";
 import { runFraction, runPhaseText } from "./run-progress";
+import { JudgmentFeedback } from "./judgment";
 
 export type PageChoice = number | "all";
 export type ViewMode = "rendered" | "markdown";
@@ -47,6 +48,11 @@ export function OutputPanel({
   view,
   filename,
   queuePosition,
+  navigation,
+  judgeNotice,
+  onJudge,
+  onSelectPage,
+  judgeBusy,
 }: {
   run: RunDetail;
   model: ArenaModel | undefined;
@@ -54,16 +60,23 @@ export function OutputPanel({
   view: ViewMode;
   filename: string;
   queuePosition: number | null;
+  navigation: React.ReactNode;
+  judgeNotice: string;
+  onJudge?: () => void;
+  onSelectPage: (page: PageChoice) => void;
+  judgeBusy: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedContent, setCopiedContent] = useState<string | null>(null);
+  const contentKey = `${run.id}:${page}`;
+  const copied = copiedContent === contentKey;
   const reference = run.kind === "reference";
   const content = run.status === "completed" ? contentFor(run, page) : null;
 
   const copy = async () => {
     if (!content) return;
     await navigator.clipboard.writeText(content.markdown);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setCopiedContent(contentKey);
+    setTimeout(() => setCopiedContent(null), 1500);
   };
 
   const download = () => {
@@ -78,11 +91,12 @@ export function OutputPanel({
 
   return (
     <section
+      id="selected-model-output"
       aria-label={`${run.model_name} output`}
-      className="card flex h-[calc(100dvh-14rem)] min-h-[520px] flex-col overflow-hidden"
+      className="card flex h-[calc(100dvh-14rem)] min-h-[520px] min-w-0 flex-col overflow-hidden"
     >
-      <header className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <div className="min-w-0 flex-1">
+      <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+        <div className="min-w-0 flex-1 basis-40">
           <div className="flex items-center gap-2">
             <h3 className="truncate font-medium">{run.model_name}</h3>
             {reference ? (
@@ -101,12 +115,24 @@ export function OutputPanel({
                 ? `${formatSeconds(content.seconds)} for this page`
                 : page === "all"
                   ? `${formatSeconds(run.parse_seconds)} in total`
+                  : run.meta.processing_mode === "whole_document"
+                    ? `${formatSeconds(run.parse_seconds)} total · ${run.pages_total} ${run.pages_total === 1 ? "page" : "pages"} processed together`
                   : reference
                     ? "Per-page time not reported by the API"
                     : "No timing for this page"
               : runPhaseText(run, queuePosition)}
+            {run.meta.runtime === "Vulkan" && run.meta.format === "GGUF F16" && (
+              <span> · AMD Vulkan · F16 GGUF</span>
+            )}
+            {run.meta.backend === "SkyVision.cpp" && (
+              <span> · CPU · F16 GGUF</span>
+            )}
+            {run.meta.processing_mode === "whole_document" && (
+              <span> · {String(run.meta.runtime)} · BF16 GGUF</span>
+            )}
           </p>
         </div>
+        {navigation}
         {content && (
           <div className="flex shrink-0 items-center">
             <PanelAction label={copied ? "Copied" : "Copy Markdown"} onClick={() => void copy()}>
@@ -123,7 +149,17 @@ export function OutputPanel({
         )}
       </header>
 
-      <div className="flex-1 overflow-auto px-5 py-4">
+      <JudgmentFeedback
+        key={`judgment:${contentKey}`}
+        run={run}
+        page={page}
+        notice={judgeNotice}
+        onJudge={onJudge}
+        onSelectPage={onSelectPage}
+        busy={judgeBusy}
+      />
+
+      <div key={`output:${contentKey}`} className="min-h-0 flex-1 overflow-auto px-5 py-4">
         {run.status === "failed" && (
           <div className="flex items-start gap-2.5 rounded-2xl bg-danger-wash p-4 text-sm text-danger">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />

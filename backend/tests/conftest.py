@@ -10,6 +10,9 @@ _DATA_DIR = Path(tempfile.mkdtemp(prefix="ocr-arena-tests-"))
 os.environ["DATA_DIR"] = str(_DATA_DIR)
 os.environ["LOCAL_INFERENCE"] = "false"
 os.environ["LLAMA_CLOUD_API_KEY"] = ""
+os.environ["MISTRAL"] = ""
+os.environ["MISTRAL_API_KEY"] = ""
+os.environ["TESSERACT_LANG"] = "eng"
 
 SAMPLE_PDF = Path(__file__).resolve().parents[1] / "samples" / "sample-report.pdf"
 

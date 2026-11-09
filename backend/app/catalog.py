@@ -104,6 +104,22 @@ MODELS: list[ArenaModel] = [
         pipeline="Nemotron Parse SDK, triple pass (page, detection, table and chart crops)",
     ),
     ArenaModel(
+        id="nemotron-skyvision-cpu",
+        name="Nemotron SkyVision CPU",
+        publisher="NVIDIA / SkyContact",
+        params="0.631B",
+        params_b=0.631,
+        license="OpenMDW-1.1",
+        scores=None,
+        implemented=True,
+        hf_repo="SkyContact/Nemotron-3.5-Parse-GGUF",
+        revision="eaa805bb6d020798998722837a57107a5d4f94b8",
+        lineage="Nemotron-3.5-Parse, F16 GGUF conversion by SkyContact",
+        pipeline=(
+            "SkyVision CPU, F16 full-page parse; NVIDIA text normalization to Markdown and layout"
+        ),
+    ),
+    ArenaModel(
         id="lightonocr-3-0.8b",
         name="LightOnOCR-3-0.8B",
         publisher="LightOn",
@@ -175,7 +191,7 @@ MODELS: list[ArenaModel] = [
     ),
     ArenaModel(
         id="docling",
-        name="Docling",
+        name="Docling Standard",
         publisher="IBM / LF AI & Data",
         params="≈0.3B (layout + TableFormer)",
         params_b=0.3,
@@ -186,6 +202,20 @@ MODELS: list[ArenaModel] = [
         verified=False,
         lineage="Layout detection and TableFormer models, runs on the CPU",
         pipeline="Docling default PDF pipeline on the CPU",
+    ),
+    ArenaModel(
+        id="granite-docling-258m",
+        name="Granite Docling 258M",
+        publisher="IBM Research",
+        params="258M",
+        params_b=0.258,
+        license="Apache-2.0",
+        scores=None,
+        implemented=True,
+        hf_repo="ibm-granite/granite-docling-258M",
+        revision="982fe3b40f2fa73c365bdb1bcacf6c81b7184bfe",
+        lineage="Compact VLM with a SigLIP2 vision encoder and Granite language model",
+        pipeline="Docling VLM pipeline, Granite DocTags to Markdown and layout boxes",
     ),
     ArenaModel(
         id="falcon-ocr",
@@ -246,9 +276,169 @@ MODELS: list[ArenaModel] = [
         license="MIT",
         scores=Scores(57.15, 72.74, 1.06, 89.16, 49.57, 73.20),
         hf_repo="baidu/Unlimited-OCR-2",
+        implemented=True,
+        revision="0480966938291445591f69f08a13b041c073a96a",
+        lineage="Baidu Unlimited-OCR 2; BF16 GGUF decoder with F16 vision encoder",
+        pipeline=(
+            "All selected pages in one request (up to 16 by default); 1024px global views, "
+            "DASH routing and page-relative RoPE. Patched llama.cpp on local Vulkan/CUDA; "
+            "masked dense computation, without the optimized sparse-memory scaling."
+        ),
+        links={"runtime": "https://huggingface.co/RX5950XT/Unlimited-OCR-2-GGUF"},
         verified=False,
     ),
 ]
+
+# These exact presets have no published ParseBench scores. Sizes describe their
+# principal networks, not the sum of every auxiliary component.
+MODELS.extend(
+    [
+        ArenaModel(
+            id="marker_fast",
+            name="Marker Fast",
+            publisher="Datalab",
+            params="≈20M layout + auxiliaries",
+            params_b=0.020,
+            license="GPL-3.0 (code), model-specific weights",
+            scores=None,
+            implemented=True,
+            lineage="Lightweight layout detector; embedded PDF text only, no OCR or Surya VLM",
+            pipeline="PdfConverter: fast, disable_ocr=True, use_llm=False; no OCR on scans",
+            links={"docs": "https://github.com/datalab-to/marker"},
+        ),
+        ArenaModel(
+            id="marker_balanced",
+            name="Marker Balanced",
+            publisher="Datalab",
+            params="≈689M Surya + auxiliaries",
+            params_b=0.689,
+            license="GPL-3.0 (code), OpenRAIL (Surya weights)",
+            scores=None,
+            implemented=True,
+            hf_repo="datalab-to/surya-ocr-2.5",
+            lineage="Surya OCR 2.5 with layout and auxiliary components",
+            pipeline="PdfConverter: balanced, disable_ocr=False, force_ocr=False, use_llm=False",
+            links={"docs": "https://github.com/datalab-to/marker"},
+        ),
+        ArenaModel(
+            id="opendataloader_core",
+            name="OpenDataLoader Core",
+            publisher="OpenDataLoader",
+            params="0 neural parameters",
+            params_b=0,
+            license="Apache-2.0",
+            scores=None,
+            implemented=True,
+            lineage="Java extraction of embedded PDF text and structure; no OCR",
+            pipeline="OpenDataLoader: hybrid=off; embedded PDF text only, no OCR on scans",
+            links={"docs": "https://www.opendataloader.org/docs"},
+        ),
+        ArenaModel(
+            id="opendataloader_docling",
+            name="OpenDataLoader Docling",
+            publisher="OpenDataLoader",
+            params="Backend-dependent",
+            params_b=None,
+            license="Apache-2.0 (code), model-specific weights",
+            scores=None,
+            implemented=True,
+            lineage="Java extraction with local Docling, EasyOCR (de/en), layout and tables",
+            pipeline=(
+                "docling-fast, auto triage, no fallback; EasyOCR de,en; "
+                "OCR/tables on; enrichments off"
+            ),
+            links={"docs": "https://www.opendataloader.org/docs/hybrid-mode"},
+        ),
+        ArenaModel(
+            id="doctr_compact",
+            name="docTR compact",
+            publisher="Mindee",
+            params="≈6.3M",
+            params_b=0.0063,
+            license="Apache-2.0",
+            scores=None,
+            implemented=True,
+            lineage="MobileNet detector and CRNN MobileNet recognizer",
+            pipeline=(
+                "db_mobilenet_v3_large + crnn_mobilenet_v3_small; pretrained; layout/tables off"
+            ),
+            links={"docs": "https://mindee.github.io/doctr/using_doctr/using_models.html"},
+        ),
+        ArenaModel(
+            id="doctr_default",
+            name="docTR default",
+            publisher="Mindee",
+            params="≈26.4M at inference",
+            params_b=0.0264,
+            license="Apache-2.0",
+            scores=None,
+            implemented=True,
+            lineage="FAST base detector and CRNN VGG16 recognizer",
+            pipeline="fast_base + crnn_vgg16_bn; pretrained; layout/tables off",
+            links={"docs": "https://mindee.github.io/doctr/using_doctr/using_models.html"},
+        ),
+        ArenaModel(
+            id="doctr_large_transformer",
+            name="docTR Large transformer",
+            publisher="Mindee",
+            params="≈110.6M",
+            params_b=0.1106,
+            license="Apache-2.0",
+            scores=None,
+            implemented=True,
+            lineage="DB ResNet50 detector and ViTSTR base transformer recognizer",
+            pipeline="db_resnet50 + vitstr_base; pretrained; layout/tables off",
+            links={"docs": "https://mindee.github.io/doctr/using_doctr/using_models.html"},
+        ),
+    ]
+)
+
+# PP-OCRv6 sizes include the matching detector + recognizer, without optional models.
+MODELS.extend(
+    ArenaModel(
+        id=f"paddleocr_{tier}",
+        name=f"PaddleOCR {tier.title()}",
+        publisher="PaddlePaddle",
+        params=size,
+        params_b=billions,
+        license="Apache-2.0",
+        scores=None,
+        implemented=True,
+        hf_repo=f"PaddlePaddle/PP-OCRv6_{tier}_det_safetensors",
+        revision=revision,
+        lineage=f"PP-OCRv6 {tier}: detector + matching multilingual text recognizer",
+        pipeline=(
+            "PP-OCRv6 detection + recognition via Transformers; "
+            "text lines and boxes; orientation, unwarping and table models off"
+        ),
+        links={
+            "recognizer": f"https://huggingface.co/PaddlePaddle/PP-OCRv6_{tier}_rec_safetensors",
+            "docs": "https://huggingface.co/blog/PaddlePaddle/pp-ocrv6",
+        },
+    )
+    for tier, size, billions, revision in [
+        ("tiny", "1.5M", 0.0015, "07595f982703daf0d4e120a12a01da8073542f3a"),
+        ("small", "7.7M", 0.0077, "eae2ee920a39fb3087637d3dbb58df1896ec1f24"),
+        ("medium", "34.5M", 0.0345, "4236c2b61741a259c091fd879dcc4edc339e916c"),
+    ]
+)
+MODELS.append(
+    ArenaModel(
+        id="glm-ocr",
+        name="GLM-OCR 0.9B",
+        publisher="Z.ai",
+        params="0.9B",
+        params_b=0.9,
+        license="MIT",
+        scores=None,
+        implemented=True,
+        hf_repo="zai-org/GLM-OCR",
+        revision="2e85a62840ccac27daa451df36c736c4636b8628",
+        lineage="CogViT vision encoder with a GLM language decoder",
+        pipeline="Full-page Text Recognition via Transformers; no additional layout detector",
+        links={"docs": "https://huggingface.co/docs/transformers/en/model_doc/glm_ocr"},
+    )
+)
 
 REFERENCE = ArenaModel(
     id=LLAMAPARSE_ID,
@@ -267,8 +457,11 @@ REFERENCE = ArenaModel(
 LLAMAPARSE_CREDITS_PER_PAGE = 45
 LLAMAPARSE_USD_PER_CREDIT = 0.00125
 
+# Keep metadata for saved runs, but exclude retired methods from the active catalog.
+RETIRED_MODELS = {m.id: m for m in MODELS if m.id in {"nemotron-3.5-parse", "falcon-ocr"}}
+MODELS = [m for m in MODELS if m.id not in RETIRED_MODELS]
 ALL_MODELS: dict[str, ArenaModel] = {m.id: m for m in [*MODELS, REFERENCE]}
 
 
 def get_model(model_id: str) -> ArenaModel | None:
-    return ALL_MODELS.get(model_id)
+    return ALL_MODELS.get(model_id) or RETIRED_MODELS.get(model_id)

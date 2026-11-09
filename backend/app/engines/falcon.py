@@ -8,6 +8,8 @@ to HTML and quotes HTML attributes.
 
 import asyncio
 import importlib.util
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -112,11 +114,16 @@ class FalconOcrEngine(OpenModelEngine):
         reason = super().unavailable_reason()
         if reason:
             return reason
-        if not triton_available():
+        device = describe_local_device(self.settings.local_device)
+        if sys.platform != "linux" or device.get("runtime") != "CUDA":
             return (
-                "Falcon-OCR's model code needs Triton and FlexAttention, which means Linux with "
-                "an NVIDIA GPU."
+                "Requires Linux with an NVIDIA GPU for Triton/FlexAttention. "
+                "Deploy with RUNTIME_PROFILE=linux-nvidia and scripts/install-linux-nvidia.sh."
             )
+        if not triton_available():
+            return "Triton is missing. Run scripts/install-linux-nvidia.sh on the NVIDIA host."
+        if not (shutil.which("gcc") or shutil.which("clang")):
+            return "Falcon-OCR needs a C compiler for Triton. Install build-essential on Linux."
         return None
 
     def build_local(self) -> FalconRuntime:

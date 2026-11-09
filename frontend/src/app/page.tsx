@@ -90,7 +90,7 @@ export default function HomePage() {
             <dl className="mt-10 grid max-w-2xl grid-cols-3 gap-6 border-t border-ash/70 pt-6">
               <div>
                 <dt className="eyebrow text-[11px]">Line-up</dt>
-                <dd className="mt-1 text-2xl tracking-tight">15 open parsers</dd>
+                <dd className="mt-1 text-2xl tracking-tight">26 open parsers</dd>
               </div>
               <div>
                 <dt className="eyebrow text-[11px]">Compared on</dt>
@@ -183,17 +183,11 @@ export default function HomePage() {
               <ModelsTable />
             </Suspense>
           </div>
-          <ul className="mt-5 space-y-1.5 text-sm text-faint">
-            <li>
-              <span className="font-medium text-amber">Unverified</span>: a submitted result that
-              ParseBench has not independently verified yet.
-            </li>
-            <li>
-              Every model runs with the pipeline, page resolution, prompts and post-processing its
-              ParseBench score was measured with, e.g. the KDL two-stage pipeline that Aeddix
-              Alpine OCR&apos;s score requires.
-            </li>
-          </ul>
+          <p className="mt-5 text-sm text-faint">
+            Each model uses its own extraction pipeline, page resolution and settings. ParseBench
+            scores describe the benchmark configuration; local settings can differ. Methods
+            without a published score are available for comparison on your own documents.
+          </p>
         </div>
       </section>
 

@@ -144,8 +144,8 @@ def as_submitted(image: Image.Image) -> Image.Image:
 class NemotronEngine(OpenModelEngine):
     render = RenderSpec(dpi=150)
     rocm_unsupported = (
-        "Disabled on AMD ROCm GPUs: the model code aborts the process with a GPU error. "
-        "Run it on an NVIDIA GPU or via a vLLM endpoint (NEMOTRON_3_5_PARSE_ENDPOINT_URL)."
+        "Requires an NVIDIA host for GPU inference; its native ROCm path crashes. "
+        "Use RUNTIME_PROFILE=linux-nvidia there, or NEMOTRON_3_5_PARSE_ENDPOINT_URL."
     )
 
     def build_local(self) -> NemotronRuntime:

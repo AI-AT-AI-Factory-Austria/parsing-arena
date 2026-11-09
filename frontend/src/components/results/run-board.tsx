@@ -3,8 +3,9 @@
 import clsx from "clsx";
 import { formatSeconds } from "@/lib/format";
 import type { ArenaModel, ExperimentDetail, Run } from "@/lib/types";
-import { Chip, ProgressBar, StatusChip } from "@/components/ui";
+import { ProgressBar, StatusChip } from "@/components/ui";
 import { runFraction, runPhaseText } from "./run-progress";
+import { JudgmentBadge } from "./judgment";
 
 function elapsed(run: Run, now: number | null): number | null {
   if (!run.started_at || now === null) return null;
@@ -17,7 +18,7 @@ function backendText(run: Run): string | null {
   if (m.backend === "endpoint") return "vLLM endpoint";
   if (m.backend === "pypdf") return "Text layer only · no model";
   if (m.backend === "tesseract") return `Tesseract ${m.version ?? ""} · ${m.lang ?? "eng"} · CPU`;
-  if (m.backend === "docling") return `Docling · CPU, ${m.threads ?? 4} threads`;
+  if (m.backend === "docling") return `Docling Standard · CPU, ${m.threads ?? 4} threads`;
   if (m.backend === "transformers") {
     const device = m.device_name ? String(m.device_name).replace(/\(TM\)/g, "") : "local";
     return [device, m.runtime, m.dtype].filter(Boolean).join(" · ");
@@ -28,13 +29,15 @@ function backendText(run: Run): string | null {
 export function RunBoard({
   experiment,
   models,
-  creditsUsd,
   now,
+  selectedRunId,
+  onSelectRun,
 }: {
   experiment: ExperimentDetail;
   models: Map<string, ArenaModel>;
-  creditsUsd: number | null;
   now: number | null;
+  selectedRunId: string;
+  onSelectRun: (id: string) => void;
 }) {
   const runs = experiment.runs;
   const slowest = Math.max(
@@ -45,14 +48,21 @@ export function RunBoard({
   return (
     <div className="card overflow-hidden">
       <div className="flex flex-col gap-1 border-b border-line px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:px-6">
-        <h2 className="text-lg tracking-tight">Speed</h2>
-        <p className="text-sm text-faint">
+        <h2 className="shrink-0 text-lg tracking-tight">Speed & quality</h2>
+        <p className="max-w-3xl text-sm text-faint">
           Open models run one after another on the same hardware; model loading is not counted as
-          parse time. LlamaParse runs in parallel and its time is the API turnaround.
+          parse time. Quality is checked against LlamaParse; the worst page sets the overall verdict.
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] text-left text-sm">
+        <table className="w-full min-w-[820px] table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[26%]" />
+            <col className="w-[18%]" />
+            <col className="w-[22%]" />
+            <col className="w-[14%]" />
+            <col className="w-[20%]" />
+          </colgroup>
           <thead>
             <tr className="eyebrow text-[11px]">
               <th scope="col" className="py-3 pl-5 pr-4 font-normal sm:pl-6">
@@ -61,14 +71,14 @@ export function RunBoard({
               <th scope="col" className="py-3 pr-4 font-normal">
                 Status
               </th>
-              <th scope="col" className="w-[30%] py-3 pr-4 font-normal">
+              <th scope="col" className="py-3 pr-4 font-normal">
                 Seconds per page
               </th>
               <th scope="col" className="py-3 pr-4 text-right font-normal">
                 Parse time
               </th>
-              <th scope="col" className="py-3 pr-5 text-right font-normal sm:pr-6">
-                {runs.some((r) => r.kind === "reference") ? "Load / credits" : "Model load"}
+              <th scope="col" className="py-3 pl-5 pr-5 font-normal sm:pr-6">
+                Quality
               </th>
             </tr>
           </thead>
@@ -78,29 +88,39 @@ export function RunBoard({
               const fraction = runFraction(run);
               const active = run.status === "loading" || run.status === "running";
               const reference = run.kind === "reference";
-              const credits = typeof run.meta.credits === "number" ? run.meta.credits : null;
               return (
-                <tr key={run.id} className="border-t border-line align-middle">
+                <tr
+                  key={run.id}
+                  className={clsx(
+                    "border-t border-line align-middle",
+                    run.id === selectedRunId && "bg-brand-wash",
+                  )}
+                >
                   <th scope="row" className="py-4 pl-5 pr-4 font-normal sm:pl-6">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-ink">{run.model_name}</span>
-                      {reference ? (
-                        <Chip tone="mint">Reference</Chip>
-                      ) : (
-                        model && (
-                          <span className="rounded-full bg-brand-wash px-2 py-px font-mono text-[11px] text-brand">
-                            {model.params}
-                          </span>
-                        )
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSelectRun(run.id)}
+                        aria-pressed={run.id === selectedRunId}
+                        aria-controls="selected-model-output"
+                        title={`View ${run.model_name} output`}
+                        className="rounded text-left font-medium text-brand hover:underline"
+                      >
+                        {run.model_name}
+                      </button>
+                      {!reference && model && (
+                        <span className="rounded-full bg-brand-wash px-2 py-px font-mono text-[11px] text-brand">
+                          {model.params}
+                        </span>
                       )}
                     </div>
                     {backendText(run) && (
-                      <p className="mt-0.5 text-xs text-faint">{backendText(run)}</p>
+                      <p className="mt-0.5 truncate text-xs text-faint" title={backendText(run) ?? undefined}>{backendText(run)}</p>
                     )}
                   </th>
                   <td className="py-4 pr-4">
                     {active || run.status === "queued" ? (
-                      <div className="min-w-[220px] max-w-[300px]">
+                      <div className="max-w-[220px]">
                         <div className="flex items-center justify-between gap-3 text-xs">
                           <span className="truncate text-body">
                             {runPhaseText(run, experiment.queue_position)}
@@ -134,7 +154,7 @@ export function RunBoard({
                   </td>
                   <td className="py-4 pr-4">
                     {run.status === "completed" && run.seconds_per_page != null ? (
-                      <div className="flex items-center gap-3">
+                      <div className="flex max-w-[240px] items-center gap-3">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-fog">
                           <div
                             className={clsx(
@@ -157,26 +177,16 @@ export function RunBoard({
                   <td className="py-4 pr-4 text-right font-mono tabular-nums text-body">
                     {run.status === "completed" ? formatSeconds(run.parse_seconds) : "–"}
                   </td>
-                  <td className="py-4 pr-5 text-right font-mono tabular-nums text-body sm:pr-6">
-                    {reference ? (
-                      credits != null ? (
-                        <span title={creditsUsd != null ? `≈ $${(credits * creditsUsd).toFixed(2)}` : undefined}>
-                          {credits.toLocaleString("en-GB")} cr
-                        </span>
-                      ) : (
-                        "–"
-                      )
-                    ) : run.load_seconds != null ? (
-                      run.load_seconds < 0.05 ? (
-                        <span className="font-sans text-faint" title="The model was already in memory">
-                          In memory
-                        </span>
-                      ) : (
-                        formatSeconds(run.load_seconds)
-                      )
-                    ) : (
-                      "–"
-                    )}
+                  <td className="py-4 pl-5 pr-5 sm:pr-6">
+                    <button
+                      type="button"
+                      className="rounded-full text-left"
+                      onClick={() => onSelectRun(run.id)}
+                      aria-label={`View quality feedback for ${run.model_name}`}
+                      aria-controls="selected-model-output"
+                    >
+                      <JudgmentBadge run={run} />
+                    </button>
                   </td>
                 </tr>
               );

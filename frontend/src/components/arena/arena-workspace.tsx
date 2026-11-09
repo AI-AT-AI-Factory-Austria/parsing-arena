@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { ArrowRight, Check, Cpu, ExternalLink, Info, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { ArrowRight, Check, Cpu, ExternalLink, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { fileKind, formatBytes, formatScore, parsePageSelection, pluralize } from "@/lib/format";
 import { usePolling } from "@/lib/use-polling";
 import type { ArenaModel, DocumentInfo, Health, ModelsResponse } from "@/lib/types";
 import { Chip, Spinner } from "@/components/ui";
 import { ACCEPT, Dropzone, validateFile } from "./dropzone";
+import { SampleGallery } from "./sample-gallery";
 
 type Catalog = { models: ModelsResponse; health: Health };
 
@@ -18,6 +19,7 @@ function backendLabel(model: ArenaModel, health: Health): string {
   const backend = model.availability.backend;
   if (backend === "api") return "Hosted API";
   if (backend === "endpoint") return "vLLM endpoint";
+  if (model.availability.runtime_label) return model.availability.runtime_label;
   if (backend === "cpu") return "CPU";
   const device = health.local_device;
   if (device?.available && device.device !== "cpu") return "Local GPU";
@@ -38,6 +40,7 @@ export function ArenaWorkspace() {
   const [doc, setDoc] = useState<DocumentInfo | null>(null);
   const [upload, setUpload] = useState<{ name: string; progress: number } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [openingSample, setOpeningSample] = useState(false);
   const [selection, setSelection] = useState<string[] | null>(null);
   const [pageMode, setPageMode] = useState<"all" | "custom">("all");
   const [pageInput, setPageInput] = useState("");
@@ -52,7 +55,6 @@ export function ArenaWorkspace() {
     ? [...data.models.models.filter((m) => m.implemented), data.models.reference]
     : [];
   const comingSoon = data ? data.models.models.filter((m) => !m.implemented) : [];
-  // The reference uploads pages to an external API, so it is opt-in.
   const selected =
     selection ??
     choices.filter((m) => m.availability.runnable && m.kind === "open").map((m) => m.id);
@@ -119,13 +121,14 @@ export function ArenaWorkspace() {
 
   const handleSample = async () => {
     setUploadError(null);
-    setUpload({ name: "sample-report.pdf", progress: 1 });
+    setOpeningSample(true);
     try {
-      adoptDocument(await api.sampleDocument());
+      const sample = await api.randomSample();
+      router.push(`/experiments/${sample.experiment_id}`);
     } catch (err) {
       setUploadError((err as Error).message);
     } finally {
-      setUpload(null);
+      setOpeningSample(false);
     }
   };
 
@@ -223,6 +226,8 @@ export function ArenaWorkspace() {
             onSample={() => void handleSample()}
             upload={upload}
             maxMb={maxMb}
+            disabled={openingSample}
+            sampleLoading={openingSample}
           />
         )}
         {uploadError && (
@@ -233,6 +238,7 @@ export function ArenaWorkspace() {
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" /> {uploadError}
           </p>
         )}
+        <SampleGallery />
       </section>
 
       {/* Run settings */}
@@ -240,6 +246,61 @@ export function ArenaWorkspace() {
         <h2 id="settings-heading" className="text-xl tracking-tight">
           Run settings
         </h2>
+
+        {data && reference && (
+          <fieldset className="mt-6 min-w-0 border-b border-line pb-6">
+            <legend className="eyebrow">Automatic judging</legend>
+            <label
+              className={clsx(
+                "mt-3 flex gap-3 rounded-2xl border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand",
+                !reference.availability.runnable
+                  ? "cursor-not-allowed border-line bg-smoke"
+                  : referenceSelected
+                    ? "cursor-pointer border-brand bg-brand-wash"
+                    : "cursor-pointer border-line hover:border-ash",
+              )}
+            >
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={reference.availability.runnable && referenceSelected}
+                disabled={!reference.availability.runnable}
+                onChange={() => toggle(reference.id)}
+                aria-labelledby="reference-name"
+                aria-describedby="reference-details"
+              />
+              <span
+                aria-hidden
+                className={clsx(
+                  "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border transition-colors",
+                  referenceSelected ? "border-brand bg-brand text-white" : "border-ash bg-white",
+                )}
+              >
+                {referenceSelected && <Check className="size-3.5" strokeWidth={3} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span id="reference-name" className="font-medium">{reference.name}</span>
+                  <Chip tone="outline">External API</Chip>
+                </span>
+                <span id="reference-details" className="mt-1.5 block text-xs font-bold leading-relaxed text-danger">
+                  Uploads selected pages to the LlamaParse API. Mistral receives the extracted
+                  text and uses this reference to judge each model.
+                </span>
+                {!reference.availability.runnable && reference.availability.reason && (
+                  <span className="mt-1.5 block text-xs text-amber">
+                    {reference.availability.reason}
+                  </span>
+                )}
+                {!data.health.judge_configured && (
+                  <span className="mt-1.5 block text-xs text-amber">
+                    Automatic judging is unavailable: Mistral is not configured.
+                  </span>
+                )}
+              </span>
+            </label>
+          </fieldset>
+        )}
 
         <fieldset className="mt-6 min-w-0">
           <legend className="eyebrow">Models</legend>
@@ -258,7 +319,7 @@ export function ArenaWorkspace() {
           )}
           {data && (
             <ul className="mt-3 space-y-2">
-              {choices.map((model) => {
+              {choices.filter((model) => model.kind !== "reference").map((model) => {
                 const runnable = model.availability.runnable;
                 const checked = runnable && selected.includes(model.id);
                 return (
@@ -293,7 +354,6 @@ export function ArenaWorkspace() {
                         <span className="flex items-center justify-between gap-2">
                           <span className="flex min-w-0 items-center gap-2">
                             <span className="truncate font-medium">{model.name}</span>
-                            {model.kind === "reference" && <Chip tone="mint">Reference</Chip>}
                           </span>
                           <span
                             className="shrink-0 font-mono text-sm tabular-nums text-muted"
@@ -303,10 +363,19 @@ export function ArenaWorkspace() {
                           </span>
                         </span>
                         <span className="mt-0.5 block text-xs text-faint">
-                          {model.kind === "reference"
-                            ? `Optional · external API (LlamaIndex Cloud) · about ${data.models.llamaparse_credits_per_page} credits per page`
-                            : `${model.publisher} · ${model.params} · ${backendLabel(model, data.health)}`}
+                          {`${model.publisher} · ${model.params} · ${backendLabel(model, data.health)}`}
                         </span>
+                        {(model.id === "marker_fast" || model.id === "opendataloader_core") && (
+                          <span className="mt-1 block text-xs text-muted">
+                            Embedded PDF text only · No OCR on scanned pages
+                          </span>
+                        )}
+                        {model.id === "unlimited-ocr-2" && (
+                          <span className="mt-1 block text-xs text-muted">
+                            Reads up to {model.availability.max_pages ?? 16} pages together. This local
+                            runtime does not provide the optimized long-document memory savings.
+                          </span>
+                        )}
                         {!runnable && model.availability.reason && (
                           <span className="mt-1.5 block text-xs text-amber">
                             {model.availability.reason}
@@ -443,16 +512,19 @@ export function ArenaWorkspace() {
                   <Cpu aria-hidden className="mt-px size-3.5 shrink-0" />
                   Local models run on{" "}
                   {data.health.local_device.device_name ?? data.health.local_device.device}
-                  {data.health.local_device.runtime ? ` (${data.health.local_device.runtime})` : ""}
                   , one model at a time so timings stay comparable.
                 </p>
               )}
-              {referenceSelected && (
-                <p className="flex gap-2">
-                  <Info aria-hidden className="mt-px size-3.5 shrink-0" />
-                  LlamaParse uploads the selected pages to LlamaIndex Cloud. Open models keep the
-                  document on this server.
+              {data.health.runtime_profile && data.health.runtime_profile !== "disabled" && (
+                <p>
+                  Runtime profile: {data.health.runtime_profile === "windows-amd"
+                    ? "Windows / AMD (ROCm + Vulkan)"
+                    : data.health.runtime_profile === "linux-nvidia"
+                      ? "Linux / NVIDIA (CUDA)" : "Native"}
                 </p>
+              )}
+              {data.health.runtime_profile_error && (
+                <p role="alert" className="text-danger">{data.health.runtime_profile_error}</p>
               )}
             </div>
           )}

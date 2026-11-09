@@ -38,7 +38,9 @@ function StatusCell({ model }: { model: ArenaModel }) {
         <Dot /> In arena
       </Chip>
       {availability.backend && (
-        <span className="pl-1 text-[11px] text-faint">{BACKEND_LABEL[availability.backend]}</span>
+        <span className="pl-1 text-[11px] text-faint">
+          {availability.runtime_label ?? BACKEND_LABEL[availability.backend]}
+        </span>
       )}
     </div>
   );
@@ -89,15 +91,6 @@ function ModelRow({ model, rank }: { model: ArenaModel; rank: number | null }) {
             <span className="whitespace-nowrap font-medium text-ink">{model.name}</span>
           )}
           {reference && <Chip tone="mint">Reference</Chip>}
-          {!model.verified && (
-            <Chip
-              tone="amber"
-              className="!px-2 !text-[11px]"
-              title="Submitted result that ParseBench has not independently verified yet."
-            >
-              Unverified
-            </Chip>
-          )}
         </div>
         {model.lineage && (
           <p title={model.lineage} className="mt-1 max-w-[19rem] truncate text-xs text-faint">

@@ -56,7 +56,7 @@ def local_inference_missing() -> str | None:
     return None
 
 
-_device_info: dict[str, Any] | None = None
+_device_info: dict[str, dict[str, Any]] = {}
 _device_info_lock = threading.Lock()
 
 
@@ -86,19 +86,19 @@ def resolve_dtype(preference: str, device: str):
 
 def describe_local_device(preference: str = "auto") -> dict[str, Any]:
     """Name the accelerator local models would run on (cached; imports torch)."""
-    global _device_info
     with _device_info_lock:
-        if _device_info is not None:
-            return _device_info
+        if preference in _device_info:
+            return dict(_device_info[preference])
         missing = local_inference_missing()
         if missing:
-            _device_info = {"available": False, "detail": missing}
-            return _device_info
+            return {"available": False, "detail": missing}
         import torch
 
         device = resolve_device(preference)
         info: dict[str, Any] = {"available": True, "device": device, "torch": torch.__version__}
         if device == "cuda":
+            if not torch.cuda.is_available():
+                return {"available": False, "detail": "LOCAL_DEVICE=cuda but no GPU is available."}
             props = torch.cuda.get_device_properties(0)
             info["device_name"] = props.name
             info["memory_gb"] = round(props.total_memory / 1e9, 1)
@@ -109,8 +109,8 @@ def describe_local_device(preference: str = "auto") -> dict[str, Any]:
         else:
             info["device_name"] = "CPU"
             info["runtime"] = "CPU"
-        _device_info = info
-        return info
+        _device_info[preference] = info
+        return dict(info)
 
 
 def free_accelerator_memory() -> None:
@@ -541,4 +541,11 @@ class LocalModelPool:
         async with self._lock:
             model = self._models.pop(key, None)
             if model is not None:
+                await asyncio.to_thread(model.unload)
+
+    async def close(self) -> None:
+        """Release model memory and owned helper processes when the API stops."""
+        async with self._lock:
+            while self._models:
+                _, model = self._models.popitem(last=False)
                 await asyncio.to_thread(model.unload)

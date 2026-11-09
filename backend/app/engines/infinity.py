@@ -16,7 +16,8 @@ from PIL import Image
 
 from .backends.transformers_local import LocalVisionModel
 from .base import PageSource, ParseOutput, RenderSpec, Report, element
-from .open_engine import OpenModelEngine, PageFailed, parse_page_by_page, png_data_url
+from .open_engine import PageFailed, parse_page_by_page, png_data_url
+from .qwen35 import Qwen35Engine
 from .vendor import parsebench_infinity2 as P
 
 # The doc2json prompt as published on the Apache-2.0 model card (infly/Infinity-Parser2-Flash).
@@ -108,7 +109,7 @@ def load_elements(raw: str, width: int, height: int) -> list[dict[str, Any]]:
     return elements
 
 
-class InfinityParser2Engine(OpenModelEngine):
+class InfinityParser2Engine(Qwen35Engine):
     render = RenderSpec(dpi=300)
     rocm_unsupported = (
         "Disabled on AMD ROCm GPUs: it shares LightOnOCR-3's architecture, whose local runs "
@@ -116,7 +117,9 @@ class InfinityParser2Engine(OpenModelEngine):
         "via a vLLM endpoint (INFINITY_PARSER2_FLASH_ENDPOINT_URL)."
     )
 
-    def build_local(self) -> LocalVisionModel:
+    def build_local(self):
+        if self.uses_vulkan:
+            return self.vulkan_backend(MAX_MODEL_LEN)
         assert self.model.hf_repo
         return LocalVisionModel(
             self.model.hf_repo,

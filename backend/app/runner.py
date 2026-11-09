@@ -22,6 +22,7 @@ from .config import Settings
 from .db import session_scope
 from .engines.base import EngineUnavailable, PageSource, ParseOutput, RenderSpec, Report
 from .engines.registry import EngineRegistry
+from .judging import JudgeService
 from .models import Document, Experiment, ModelRun, utcnow
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,12 @@ def _update_run(run_id: str, **fields: Any) -> None:
 
 
 class Runner:
-    def __init__(self, settings: Settings, registry: EngineRegistry):
+    def __init__(
+        self, settings: Settings, registry: EngineRegistry, judge: JudgeService | None = None
+    ):
         self.settings = settings
         self.registry = registry
+        self.judge = judge
         self._pending: deque[str] = deque()
         self._wakeup: asyncio.Event | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -289,3 +293,6 @@ class Runner:
             run.meta = {**(run.meta or {}), **output.meta}
             run.progress = {"phase": "done"}
             run.finished_at = utcnow()
+            experiment_id = run.experiment_id
+        if self.judge:
+            self.judge.submit_experiment(experiment_id)

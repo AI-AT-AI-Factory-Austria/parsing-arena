@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, Field
 
@@ -28,6 +28,8 @@ class AvailabilityOut(BaseModel):
     backend: str | None = None
     reason: str | None = None
     loaded: bool | None = None
+    runtime_label: str | None = None
+    max_pages: int | None = None
 
 
 class ModelOut(BaseModel):
@@ -61,7 +63,10 @@ class HealthOut(BaseModel):
     status: str
     version: str
     llamaparse_configured: bool
+    judge_configured: bool
     local_device: dict[str, Any] | None
+    runtime_profile: str = "native"
+    runtime_profile_error: str | None = None
     max_upload_mb: int
     max_pages_per_experiment: int
 
@@ -85,6 +90,36 @@ class PageResultOut(BaseModel):
     error: str | None = None
 
 
+Verdict = Literal["excellent", "pass", "fail"]
+
+
+class JudgeIssueOut(BaseModel):
+    severity: Literal["minor", "major"]
+    category: str
+    message: str
+    reference_quote: str
+    candidate_quote: str
+
+
+class PageJudgmentOut(BaseModel):
+    page_number: int
+    verdict: Verdict
+    issues: list[JudgeIssueOut]
+
+
+class JudgmentOut(BaseModel):
+    status: Literal["queued", "running", "completed", "failed"]
+    verdict: Verdict | None
+    model: str
+    rubric_version: str
+    reference_run_id: str
+    pages_done: int
+    pages_total: int
+    pages: list[PageJudgmentOut]
+    finished_at: UtcDatetime | None
+    error: str | None
+
+
 class RunOut(BaseModel):
     id: str
     model_id: str
@@ -101,6 +136,7 @@ class RunOut(BaseModel):
     progress: dict[str, Any]
     meta: dict[str, Any]
     error: str | None
+    judgment: JudgmentOut | None
 
 
 class RunDetailOut(RunOut):
@@ -119,6 +155,8 @@ class ExperimentOut(BaseModel):
     queue_position: int | None
     document: DocumentOut
     runs: list[RunOut]
+    judge_configured: bool
+    judge_model: str
 
 
 class ExperimentDetailOut(ExperimentOut):
@@ -133,3 +171,23 @@ class ExperimentCreate(BaseModel):
     document_id: str
     models: list[str] = Field(min_length=1)
     pages: str | None = Field(default=None, description="e.g. '1-3,5'; empty = all pages")
+
+
+class SampleOut(BaseModel):
+    id: str
+    title: str
+    document: DocumentOut
+    experiment_id: str | None
+    status: Literal["unprepared", "queued", "running", "completed", "failed"]
+    model_count: int
+    completed_models: int
+    judging: bool
+
+
+class SampleList(BaseModel):
+    samples: list[SampleOut]
+
+
+class SamplePrepare(BaseModel):
+    models: list[str] = Field(min_length=1)
+    refresh: bool = False

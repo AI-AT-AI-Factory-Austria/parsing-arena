@@ -12,6 +12,8 @@ export type Availability = {
   backend: "local" | "cpu" | "endpoint" | "api" | null;
   reason: string | null;
   loaded: boolean | null;
+  runtime_label?: string | null;
+  max_pages?: number | null;
 };
 
 export type ArenaModel = {
@@ -56,7 +58,10 @@ export type Health = {
   status: string;
   version: string;
   llamaparse_configured: boolean;
+  judge_configured: boolean;
   local_device: LocalDevice | null;
+  runtime_profile?: string;
+  runtime_profile_error?: string | null;
   max_upload_mb: number;
   max_pages_per_experiment: number;
 };
@@ -76,7 +81,7 @@ export type RunStatus = "queued" | "loading" | "running" | "completed" | "failed
 export type ExperimentStatus = "queued" | "running" | "completed" | "failed";
 
 export type RunProgress = {
-  phase?: "queued" | "loading" | "uploading" | "parsing" | "layout" | "recognition" | "done";
+  phase?: "queued" | "loading" | "uploading" | "parsing" | "document" | "layout" | "recognition" | "done";
   page?: number;
   page_index?: number;
   regions_done?: number;
@@ -115,6 +120,36 @@ export type Run = {
   progress: RunProgress;
   meta: RunMeta;
   error: string | null;
+  judgment: Judgment | null;
+};
+
+export type Verdict = "excellent" | "pass" | "fail";
+
+export type JudgeIssue = {
+  severity: "minor" | "major";
+  category: string;
+  message: string;
+  reference_quote: string;
+  candidate_quote: string;
+};
+
+export type PageJudgment = {
+  page_number: number;
+  verdict: Verdict;
+  issues: JudgeIssue[];
+};
+
+export type Judgment = {
+  status: "queued" | "running" | "completed" | "failed";
+  verdict: Verdict | null;
+  model: string;
+  rubric_version: string;
+  reference_run_id: string;
+  pages_done: number;
+  pages_total: number;
+  pages: PageJudgment[];
+  finished_at: string | null;
+  error: string | null;
 };
 
 export type PageElement = {
@@ -148,6 +183,19 @@ export type Experiment = {
   queue_position: number | null;
   document: DocumentInfo;
   runs: Run[];
+  judge_configured: boolean;
+  judge_model: string;
 };
 
 export type ExperimentDetail = Omit<Experiment, "runs"> & { runs: RunDetail[] };
+
+export type SampleDocument = {
+  id: string;
+  title: string;
+  document: DocumentInfo;
+  experiment_id: string | null;
+  status: ExperimentStatus | "unprepared";
+  model_count: number;
+  completed_models: number;
+  judging: boolean;
+};

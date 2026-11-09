@@ -103,6 +103,10 @@ class OpenModelEngine:
             return None
         if not self.settings.local_inference:
             return "Local inference is disabled and no endpoint URL is configured."
+        from ..runtime import profile_error
+
+        if error := profile_error(self.settings):
+            return error
         missing = local_inference_missing()
         if missing:
             return missing

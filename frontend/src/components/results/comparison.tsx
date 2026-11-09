@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import clsx from "clsx";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { pageImageUrl } from "@/lib/api";
 import type { ArenaModel, ExperimentDetail } from "@/lib/types";
 import { OutputPanel, type PageChoice, type ViewMode } from "./output-panel";
 import { CategoryLegend, PagePreview } from "./page-preview";
-
-const ORIGINAL = "original";
+import { judgeNotice } from "./judgment";
 
 function Segmented<T extends string>({
   value,
@@ -45,15 +44,25 @@ function Segmented<T extends string>({
 export function Comparison({
   experiment,
   models,
+  selectedRunId,
+  onSelectRun,
+  onJudge,
+  judgeBusy,
 }: {
   experiment: ExperimentDetail;
   models: Map<string, ArenaModel>;
+  selectedRunId: string;
+  onSelectRun: (id: string) => void;
+  onJudge?: () => void;
+  judgeBusy: boolean;
 }) {
   const pages = experiment.pages;
+  const sectionRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<PageChoice>(pages[0] ?? 1);
   const [view, setView] = useState<ViewMode>("rendered");
-  const [hidden, setHidden] = useState<string[]>([]);
-  const [layoutRunId, setLayoutRunId] = useState<string>("");
+  const [showLayout, setShowLayout] = useState(false);
+  const selectedIndex = Math.max(0, experiment.runs.findIndex((r) => r.id === selectedRunId));
+  const selectedRun = experiment.runs[selectedIndex];
 
   const index = page === "all" ? -1 : pages.indexOf(page);
   const go = (delta: number) => {
@@ -61,43 +70,43 @@ export function Comparison({
     const next = pages[index + delta];
     if (next !== undefined) setPage(next);
   };
-  const onArrow = useEffectEvent(go);
+  const goModel = (delta: number) => {
+    const next = experiment.runs[selectedIndex + delta];
+    if (next) onSelectRun(next.id);
+  };
+  const onArrow = useEffectEvent((event: KeyboardEvent) => {
+    if (!sectionRef.current?.getClientRects().length || experiment.runs.length < 2) return;
+    event.preventDefault();
+    goModel(event.key === "ArrowLeft" ? -1 : 1);
+  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable]")) return;
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
-      if (event.key === "ArrowLeft") onArrow(-1);
-      if (event.key === "ArrowRight") onArrow(1);
+      if (target?.closest("input, textarea, select, [contenteditable], [role='radio']")) return;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") onArrow(event);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const panels = [
-    { id: ORIGINAL, label: "Original page" },
-    ...experiment.runs.map((run) => ({ id: run.id, label: run.model_name })),
-  ];
-  const visible = panels.filter((p) => !hidden.includes(p.id));
-  const layoutRuns = experiment.runs.filter(
-    (r) => r.kind === "open" && r.status === "completed" && r.pages.some((p) => p.elements?.length),
-  );
-  const layoutRun = layoutRuns.find((r) => r.id === layoutRunId);
   const elements =
-    layoutRun && page !== "all"
-      ? (layoutRun.pages.find((p) => p.page_number === page)?.elements ?? null)
+    selectedRun && page !== "all"
+      ? (selectedRun.pages.find((p) => p.page_number === page)?.elements ?? null)
       : null;
 
   return (
-    <section aria-labelledby="compare-heading" className="space-y-4">
+    <section ref={sectionRef} id="comparison" aria-labelledby="compare-heading" className="space-y-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <h2 id="compare-heading" className="text-2xl tracking-tight">
             Compare the outputs
           </h2>
           <p className="mt-1 text-sm text-muted">
-            The original page next to every model&apos;s output. Use ← and → to flip pages.
+            Pick a model to compare with the original. Use ← and → to switch models.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -151,119 +160,145 @@ export function Comparison({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Visible panels">
-        <span className="eyebrow mr-1 text-[11px]">Show</span>
-        {panels.map((panel) => {
-          const on = !hidden.includes(panel.id);
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Model results">
+        <span className="eyebrow mr-1 text-[11px]">Model</span>
+        {experiment.runs.map((run) => {
+          const selected = run.id === selectedRun?.id;
           return (
             <button
-              key={panel.id}
+              key={run.id}
               type="button"
-              aria-pressed={on}
-              onClick={() =>
-                setHidden(on ? [...hidden, panel.id] : hidden.filter((h) => h !== panel.id))
-              }
-              disabled={on && visible.length === 1}
+              aria-pressed={selected}
+              aria-controls="selected-model-output"
+              onClick={() => onSelectRun(run.id)}
               className={clsx(
-                "rounded-full border px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed",
-                on
+                "rounded-full border px-3.5 py-2 text-sm transition-colors",
+                selected
                   ? "border-ink bg-ink text-white"
                   : "border-line bg-white text-muted hover:border-ash hover:text-ink",
               )}
             >
-              {panel.label}
+              {run.model_name}
             </button>
           );
         })}
       </div>
 
-      <div className="overflow-x-auto pb-2">
-        <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: `repeat(${visible.length}, minmax(340px, 1fr))` }}
+      <div className="grid min-w-0 gap-4 md:grid-cols-2">
+        <section
+          aria-label="Original page"
+          className="card flex h-[calc(100dvh-14rem)] min-h-[520px] min-w-0 flex-col overflow-hidden"
         >
-          {visible.map((panel) => {
-            if (panel.id === ORIGINAL) {
-              return (
-                <section
-                  key={panel.id}
-                  aria-label="Original page"
-                  className="card flex h-[calc(100dvh-14rem)] min-h-[520px] flex-col overflow-hidden"
+          <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-medium">Original</h3>
+              <p className="mt-0.5 text-xs text-faint">
+                {page === "all" ? `${pages.length} pages` : `Page ${page}`}
+              </p>
+            </div>
+            {page !== "all" && (
+              <>
+                <label
+                  className="flex items-center gap-2 text-xs text-muted"
+                  title="Show the selected model's detected layout"
                 >
-                  <header className="flex items-center gap-2 border-b border-line px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-medium">Original</h3>
-                      <p className="mt-0.5 text-xs text-faint">
-                        {page === "all" ? `${pages.length} pages` : `Page ${page}`}
-                      </p>
-                    </div>
-                    {layoutRuns.length > 0 && page !== "all" && (
-                      <>
-                        <label htmlFor="layout-select" className="sr-only">
-                          Layout boxes
-                        </label>
-                        <select
-                          id="layout-select"
-                          value={layoutRunId}
-                          onChange={(e) => setLayoutRunId(e.target.value)}
-                          className="max-w-[11rem] cursor-pointer truncate rounded-full border border-line bg-white px-3 py-1.5 text-xs outline-none hover:border-ash"
-                        >
-                          <option value="">No layout boxes</option>
-                          {layoutRuns.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              Layout: {r.model_name}
-                            </option>
-                          ))}
-                        </select>
-                      </>
-                    )}
-                    {page !== "all" && (
-                      <a
-                        href={pageImageUrl(experiment.document.id, page)}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open the page image"
-                        aria-label="Open the page image in a new tab"
-                        className="grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-fog hover:text-ink"
-                      >
-                        <ExternalLink aria-hidden className="size-4" />
-                      </a>
-                    )}
-                  </header>
-                  <div className="flex-1 space-y-4 overflow-auto bg-smoke p-4">
-                    {(page === "all" ? pages : [page]).map((p) => (
-                      <figure key={p}>
-                        <PagePreview
-                          src={pageImageUrl(experiment.document.id, p)}
-                          alt={`Page ${p} of ${experiment.document.filename}`}
-                          elements={page === "all" ? null : elements}
-                        />
-                        {page === "all" && (
-                          <figcaption className="mt-1.5 text-center text-xs text-faint">
-                            Page {p}
-                          </figcaption>
-                        )}
-                      </figure>
-                    ))}
-                    {elements && elements.length > 0 && <CategoryLegend elements={elements} />}
-                  </div>
-                </section>
-              );
+                  <input
+                    type="checkbox"
+                    checked={showLayout}
+                    disabled={!elements?.length}
+                    onChange={(e) => setShowLayout(e.target.checked)}
+                    className="size-3.5 accent-brand"
+                  />
+                  Layout boxes
+                </label>
+                <a
+                  href={pageImageUrl(experiment.document.id, page)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Open the page image"
+                  aria-label="Open the page image in a new tab"
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-fog hover:text-ink"
+                >
+                  <ExternalLink aria-hidden className="size-4" />
+                </a>
+              </>
+            )}
+          </header>
+          <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-smoke p-4">
+            {(page === "all" ? pages : [page]).map((p) => (
+              <figure key={p}>
+                <PagePreview
+                  src={pageImageUrl(experiment.document.id, p)}
+                  alt={`Page ${p} of ${experiment.document.filename}`}
+                  elements={showLayout ? elements : null}
+                />
+                {page === "all" && (
+                  <figcaption className="mt-1.5 text-center text-xs text-faint">
+                    Page {p}
+                  </figcaption>
+                )}
+              </figure>
+            ))}
+            {showLayout && elements && elements.length > 0 && <CategoryLegend elements={elements} />}
+          </div>
+        </section>
+        {selectedRun ? (
+          <OutputPanel
+            run={selectedRun}
+            model={models.get(selectedRun.model_id)}
+            page={page}
+            view={view}
+            filename={experiment.document.filename}
+            queuePosition={experiment.queue_position}
+            judgeNotice={judgeNotice(experiment, selectedRun)}
+            onJudge={selectedRun.status === "completed" ? onJudge : undefined}
+            onSelectPage={setPage}
+            judgeBusy={judgeBusy}
+            navigation={
+              <div
+                className="flex shrink-0 items-center gap-1 rounded-full border border-line p-1"
+                role="group"
+                aria-label="Switch model"
+              >
+                <button
+                  type="button"
+                  onClick={() => goModel(-1)}
+                  disabled={selectedIndex === 0}
+                  aria-label="Previous model"
+                  title="Previous model (←)"
+                  className="grid size-8 place-items-center rounded-full text-ink hover:bg-fog disabled:text-ash disabled:hover:bg-transparent"
+                >
+                  <ChevronLeft aria-hidden className="size-4" />
+                </button>
+                <span
+                  className="min-w-12 text-center text-xs tabular-nums text-muted"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {selectedIndex + 1} / {experiment.runs.length}
+                  <span className="sr-only"> · {selectedRun.model_name}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => goModel(1)}
+                  disabled={selectedIndex === experiment.runs.length - 1}
+                  aria-label="Next model"
+                  title="Next model (→)"
+                  className="grid size-8 place-items-center rounded-full text-ink hover:bg-fog disabled:text-ash disabled:hover:bg-transparent"
+                >
+                  <ChevronRight aria-hidden className="size-4" />
+                </button>
+              </div>
             }
-            const run = experiment.runs.find((r) => r.id === panel.id)!;
-            return (
-              <OutputPanel
-                key={panel.id}
-                run={run}
-                model={models.get(run.model_id)}
-                page={page}
-                view={view}
-                filename={experiment.document.filename}
-                queuePosition={experiment.queue_position}
-              />
-            );
-          })}
-        </div>
+          />
+        ) : (
+          <div
+            id="selected-model-output"
+            className="card grid min-h-[520px] place-items-center p-6 text-sm text-muted"
+          >
+            No model runs in this experiment.
+          </div>
+        )}
       </div>
     </section>
   );

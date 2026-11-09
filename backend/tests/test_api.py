@@ -21,9 +21,28 @@ def test_models_catalog(client):
     body = client.get("/api/models").json()
     ids = [m["id"] for m in body["models"]]
     assert ids[:2] == ["rakedoc-nano", "aeddix-alpine-ocr"]
-    assert len(ids) == 15
+    assert len(ids) == 26
+    assert "nemotron-3.5-parse" not in ids and "falcon-ocr" not in ids
     by_id = {m["id"]: m for m in body["models"]}
-    tools = ("pypdf", "tesseract", "docling")
+    assert by_id["nemotron-skyvision-cpu"]["name"] == "Nemotron SkyVision CPU"
+    assert by_id["nemotron-skyvision-cpu"]["scores"] is None
+    assert by_id["nemotron-skyvision-cpu"]["availability"]["backend"] == "cpu"
+    assert by_id["docling"]["name"] == "Docling Standard"
+    assert by_id["granite-docling-258m"]["name"] == "Granite Docling 258M"
+    assert by_id["granite-docling-258m"]["scores"] is None
+    assert by_id["granite-docling-258m"]["availability"]["runnable"] is False
+    tools = (
+        "pypdf",
+        "tesseract",
+        "docling",
+        "marker_fast",
+        "marker_balanced",
+        "opendataloader_core",
+        "opendataloader_docling",
+        "doctr_compact",
+        "doctr_default",
+        "doctr_large_transformer",
+    )
     vlms = [m for m in body["models"] if m["implemented"] and m["id"] not in tools]
     assert all(m["revision"] for m in vlms if m["id"] != "rakedoc-nano")
     # CPU tools stay available when local GPU inference is off.
@@ -32,6 +51,8 @@ def test_models_catalog(client):
         "backend": "cpu",
         "reason": None,
         "loaded": None,
+        "runtime_label": None,
+        "max_pages": None,
     }
     rakedoc = body["models"][0]
     assert rakedoc["scores"]["overall"] == pytest.approx(77.23)

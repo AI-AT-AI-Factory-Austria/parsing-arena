@@ -1,4 +1,5 @@
 from ..catalog import ArenaModel, get_model
+from ..config import get_settings
 from ..engines.registry import EngineRegistry
 from ..models import Document, Experiment, ModelRun
 from ..runner import Runner
@@ -7,6 +8,7 @@ from ..schemas import (
     DocumentOut,
     ExperimentDetailOut,
     ExperimentOut,
+    JudgmentOut,
     ModelOut,
     PageResultOut,
     RunDetailOut,
@@ -70,6 +72,22 @@ def _run_fields(run: ModelRun) -> dict:
         progress=run.progress or {},
         meta=run.meta or {},
         error=run.error,
+        judgment=(
+            JudgmentOut(
+                status=run.judgment.status,
+                verdict=run.judgment.verdict,
+                model=run.judgment.model,
+                rubric_version=run.judgment.rubric_version,
+                reference_run_id=run.judgment.reference_run_id,
+                pages_done=len(run.judgment.page_results),
+                pages_total=run.judgment.pages_total,
+                pages=run.judgment.page_results,
+                finished_at=run.judgment.finished_at,
+                error=run.judgment.error,
+            )
+            if run.judgment
+            else None
+        ),
     )
 
 
@@ -97,6 +115,8 @@ def experiment_out(experiment: Experiment, runner: Runner) -> ExperimentOut:
         queue_position=runner.queue_position(experiment.id),
         document=document_out(experiment.document),
         runs=[run_out(run) for run in experiment.runs],
+        judge_configured=get_settings().judge_configured,
+        judge_model=get_settings().judge_model,
     )
 
 

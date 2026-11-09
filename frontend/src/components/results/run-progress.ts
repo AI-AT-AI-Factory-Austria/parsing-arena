@@ -4,6 +4,7 @@ import type { Run } from "@/lib/types";
 export function runFraction(run: Run): number | null {
   if (run.status === "completed") return 1;
   if (run.kind === "reference") return null;
+  if (run.progress.phase === "document") return null;
   const total = run.pages_total || 1;
   const p = run.progress;
   let within = 0;
@@ -34,6 +35,7 @@ export function runPhaseText(run: Run, queuePosition?: number | null): string {
     if (p.phase === "queued") return "Queued at LlamaParse";
     return "LlamaParse is parsing";
   }
+  if (p.phase === "document") return `Parsing ${run.pages_total} ${run.pages_total === 1 ? "page" : "pages"} together`;
   const page = (p.page_index ?? run.pages_done) + 1;
   const where = `page ${Math.min(page, run.pages_total)} of ${run.pages_total}`;
   if (p.phase === "layout") return `Detecting layout · ${where}`;

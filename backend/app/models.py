@@ -54,6 +54,21 @@ class Experiment(Base):
     )
 
 
+class SampleDocument(Base):
+    """A content-addressed sample and its reusable comparison."""
+
+    __tablename__ = "sample_documents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # file SHA-256
+    filename: Mapped[str] = mapped_column(String(512))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    experiment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("experiments.id", ondelete="SET NULL")
+    )
+    document: Mapped[Document] = relationship(lazy="selectin")
+    experiment: Mapped[Experiment | None] = relationship(lazy="selectin")
+
+
 class ModelRun(Base):
     __tablename__ = "model_runs"
 
@@ -81,3 +96,30 @@ class ModelRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
 
     experiment: Mapped[Experiment] = relationship(back_populates="runs")
+    judgment: Mapped["Judgment | None"] = relationship(
+        back_populates="run", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+
+
+class Judgment(Base):
+    """Separate table so existing databases need no destructive schema migration."""
+
+    __tablename__ = "judgments"
+
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    reference_run_id: Mapped[str] = mapped_column(String(32))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(128))
+    rubric_version: Mapped[str] = mapped_column(String(64))
+    # API/validation failures are distinct from a genuine extraction verdict of fail.
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    verdict: Mapped[str | None] = mapped_column(String(16))
+    pages_total: Mapped[int] = mapped_column(Integer)
+    page_results: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+
+    run: Mapped[ModelRun] = relationship(back_populates="judgment")

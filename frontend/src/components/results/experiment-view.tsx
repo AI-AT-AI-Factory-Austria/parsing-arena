@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, FileQuestion, RotateCcw, Trash2, TriangleAlert, WifiOff } from "lucide-react";
+import { ArrowLeft, FileQuestion, RotateCcw, Scale, Trash2, TriangleAlert, WifiOff } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { fileKind, formatDateTime, formatSeconds, pluralize } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
@@ -12,6 +12,7 @@ import type { ArenaModel, ExperimentDetail } from "@/lib/types";
 import { Spinner, StatusChip } from "@/components/ui";
 import { Comparison } from "./comparison";
 import { RunBoard } from "./run-board";
+import { isJudging } from "./judgment";
 
 const POLL_MS = 1500;
 
@@ -45,15 +46,16 @@ function summary(experiment: ExperimentDetail, now: number | null): string {
 export function ExperimentView({ id }: { id: string }) {
   const router = useRouter();
   const now = useNow();
-  const { data: experiment, error } = usePolling(
+  const { data: experiment, error, replace, refresh } = usePolling(
     id,
     () => api.experiment(id),
-    (data) => (isActive(data) ? POLL_MS : null),
+    (data) => (isActive(data) || data.runs.some(isJudging) ? POLL_MS : null),
   );
   const catalog = usePolling("models", () => api.models(), () => null);
-  const [busy, setBusy] = useState<"rerun" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"rerun" | "delete" | "judge" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState("");
 
   if (!experiment) {
     if (error instanceof ApiError && error.status === 404) {
@@ -86,7 +88,14 @@ export function ExperimentView({ id }: { id: string }) {
   }
   const doc = experiment.document;
   const active = isActive(experiment);
+  const judging = experiment.runs.some(isJudging);
+  const canJudge = experiment.judge_configured && experiment.runs.some(
+    (r) => r.kind === "reference" && r.status === "completed",
+  ) && experiment.runs.some(
+    (r) => r.kind !== "reference" && r.status === "completed" && (!r.judgment || r.judgment.status === "failed"),
+  );
   const allPages = experiment.pages.length === doc.page_count;
+  const selectedRun = experiment.runs.find((run) => run.id === selectedRunId) ?? experiment.runs[0];
 
   const rerun = async () => {
     setBusy("rerun");
@@ -110,6 +119,19 @@ export function ExperimentView({ id }: { id: string }) {
       setActionError((err as Error).message);
       setBusy(null);
       setConfirmDelete(false);
+    }
+  };
+
+  const judge = async () => {
+    setBusy("judge");
+    setActionError(null);
+    try {
+      replace(await api.judge(id));
+      refresh();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -151,6 +173,12 @@ export function ExperimentView({ id }: { id: string }) {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {canJudge && (
+              <button type="button" onClick={() => void judge()} disabled={busy !== null} className="btn btn-outline btn-sm">
+                {busy === "judge" ? <Spinner className="size-3.5" /> : <Scale aria-hidden className="size-3.5" />}
+                Judge outputs
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void rerun()}
@@ -170,7 +198,7 @@ export function ExperimentView({ id }: { id: string }) {
                 <button
                   type="button"
                   onClick={() => void remove()}
-                  disabled={busy !== null}
+                  disabled={busy !== null || judging}
                   className="btn btn-sm bg-danger text-white hover:bg-danger/90"
                 >
                   {busy === "delete" ? (
@@ -192,8 +220,8 @@ export function ExperimentView({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                disabled={active || busy !== null}
-                title={active ? "Wait until the run has finished" : undefined}
+                disabled={active || judging || busy !== null}
+                title={active || judging ? "Wait until parsing and quality checks finish" : undefined}
                 className="btn btn-ghost btn-sm"
               >
                 <Trash2 aria-hidden className="size-3.5" /> Delete
@@ -218,14 +246,25 @@ export function ExperimentView({ id }: { id: string }) {
         )}
       </div>
 
+      <Comparison
+        experiment={experiment}
+        models={models}
+        selectedRunId={selectedRun?.id ?? ""}
+        onSelectRun={setSelectedRunId}
+        onJudge={canJudge ? () => void judge() : undefined}
+        judgeBusy={busy === "judge"}
+      />
+
       <RunBoard
         experiment={experiment}
         models={models}
-        creditsUsd={catalog.data?.llamaparse_usd_per_credit ?? null}
         now={now}
+        selectedRunId={selectedRun?.id ?? ""}
+        onSelectRun={(runId) => {
+          setSelectedRunId(runId);
+          document.getElementById("comparison")?.scrollIntoView({ block: "start" });
+        }}
       />
-
-      <Comparison experiment={experiment} models={models} />
     </div>
   );
 }
@@ -238,12 +277,12 @@ export function ExperimentSkeleton() {
         <div className="h-9 w-80 max-w-full rounded-lg bg-fog" />
         <div className="h-4 w-96 max-w-full rounded bg-fog" />
       </div>
-      <div className="card h-56 animate-pulse" />
-      <div className="grid gap-4 md:grid-cols-3">
-        {[0, 1, 2].map((i) => (
+      <div className="grid gap-4 md:grid-cols-2">
+        {[0, 1].map((i) => (
           <div key={i} className="card h-[420px] animate-pulse" />
         ))}
       </div>
+      <div className="card h-56 animate-pulse" />
     </div>
   );
 }

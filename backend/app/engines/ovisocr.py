@@ -12,7 +12,8 @@ from PIL import Image
 
 from .backends.transformers_local import LocalVisionModel
 from .base import PageSource, ParseOutput, RenderSpec, Report, element
-from .open_engine import OpenModelEngine, PageFailed, parse_page_by_page, png_data_url
+from .open_engine import PageFailed, parse_page_by_page, png_data_url
+from .qwen35 import Qwen35Engine
 from .vendor import parsebench_ovisocr3 as O
 
 MAX_MODEL_LEN = 32768
@@ -31,7 +32,7 @@ def crop_region(page: Image.Image, bbox: list[float]) -> Image.Image | None:
     return page.crop((x1, y1, x2, y2)).convert("RGB")
 
 
-class OvisOcr3Engine(OpenModelEngine):
+class OvisOcr3Engine(Qwen35Engine):
     render = RenderSpec(dpi=200)
     rocm_unsupported = (
         "Disabled on AMD ROCm GPUs: it shares LightOnOCR-3's Qwen3.5 architecture, whose local "
@@ -39,7 +40,9 @@ class OvisOcr3Engine(OpenModelEngine):
         "(OVISOCR3_ENDPOINT_URL)."
     )
 
-    def build_local(self) -> LocalVisionModel:
+    def build_local(self):
+        if self.uses_vulkan:
+            return self.vulkan_backend(MAX_MODEL_LEN)
         assert self.model.hf_repo
         # Qwen3.5 linear-attention layers: one request at a time, no left padding.
         return LocalVisionModel(

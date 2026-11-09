@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import clsx from "clsx";
 import { CloudUpload, FileText } from "lucide-react";
-import { ProgressBar } from "@/components/ui";
+import { ProgressBar, Spinner } from "@/components/ui";
 
 export const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff";
 const EXTENSIONS = ACCEPT.split(",");
@@ -24,12 +24,14 @@ export function Dropzone({
   upload,
   maxMb,
   disabled,
+  sampleLoading = false,
 }: {
   onFile: (file: File) => void;
   onSample: () => void;
   upload: { name: string; progress: number } | null;
   maxMb: number;
   disabled?: boolean;
+  sampleLoading?: boolean;
 }) {
   const inputId = useId();
   const [dragging, setDragging] = useState(false);
@@ -122,8 +124,8 @@ export function Dropzone({
             }}
           />
         </label>
-        <button type="button" onClick={onSample} disabled={disabled} className="btn btn-ghost">
-          Use a sample report
+        <button type="button" onClick={onSample} disabled={disabled || sampleLoading} className="btn btn-ghost">
+          {sampleLoading ? <><Spinner className="size-4" /> Opening sample…</> : "Use a sample report"}
         </button>
       </div>
     </div>

@@ -39,20 +39,29 @@ def test_every_implemented_model_has_an_engine_and_settings():
 
 
 def test_rocm_guard_refuses_models_that_crashed_it(monkeypatch):
-    from app.engines import falcon, open_engine, tools
+    from app import runtime
+    from app.engines import falcon, library_worker, open_engine, skyvision, tools
     from app.engines.registry import EngineRegistry
 
     monkeypatch.setattr(falcon, "triton_available", lambda: True)
+    monkeypatch.setattr(falcon.shutil, "which", lambda *_: "/usr/bin/gcc")
+    monkeypatch.setattr(runtime, "detected_profile", lambda: "native")
+    monkeypatch.setattr(falcon.sys, "platform", "linux")
+    monkeypatch.setattr(falcon, "describe_local_device", lambda *_: {"runtime": "CUDA"})
     monkeypatch.setattr(tools, "find_tesseract", lambda _configured: "tesseract")
+    monkeypatch.setattr(library_worker, "find_tool", lambda *_: "installed-tool")
+    monkeypatch.setattr(skyvision, "skyvision_binary", lambda *_: "vqa-cli")
+    monkeypatch.setattr(skyvision, "build_info", lambda *_: {"strict_token_limit": True})
     monkeypatch.setattr(open_engine, "local_inference_missing", lambda: None)
     monkeypatch.setattr(
         open_engine, "describe_local_device", lambda *_: {"available": True, "runtime": "ROCm"}
     )
-    implemented = [m for m in MODELS if m.implemented]
+    # Unlimited uses a separately installed Vulkan/CUDA runtime, not this ROCm guard.
+    # Its availability and hardware dispatch are exercised in test_unlimited.py.
+    implemented = [m for m in MODELS if m.implemented and m.id != "unlimited-ocr-2"]
     registry = EngineRegistry(Settings(local_inference=True))
     blocked = {m.id for m in implemented if not registry.availability(m)["runnable"]}
     assert blocked == {
-        "nemotron-3.5-parse",
         "lightonocr-3-0.8b",
         "infinity-parser2-flash",
         "ovisocr3",

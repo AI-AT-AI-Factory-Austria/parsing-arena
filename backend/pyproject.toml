@@ -21,15 +21,19 @@ dependencies = [
     "mineru-vl-utils>=2.0.8,<2.1",
     "pypdf>=6.0",
     "pytesseract>=0.3.13",
+    "psutil>=7.0",
 ]
 
 [project.optional-dependencies]
 # Local inference. PyTorch itself is installed separately because the right build
 # depends on the hardware (see scripts/install-torch.ps1 / .sh).
 local = [
+    "einops>=0.8.1",
     "docling>=2.140",
+    "opendataloader-pdf[hybrid]==2.5.18",
+    "python-doctr==1.1.0",
     "timm>=1.0.22",
-    "transformers>=5.18",
+    "transformers>=5.22.1",
 ]
 
 [dependency-groups]

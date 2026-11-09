@@ -41,6 +41,11 @@ def _create(
         availability = registry.availability(model)
         if not availability["runnable"]:
             raise HTTPException(422, f"{model.name} cannot run: {availability['reason']}")
+        max_pages = availability.get("max_pages")
+        if max_pages is not None and len(pages) > max_pages:
+            raise HTTPException(
+                422, f"{model.name} accepts at most {max_pages} pages per run. Select fewer pages."
+            )
         selected.append(model_id)
     # Open models first (catalog order), the reference parser last.
     selected.sort(key=lambda m: (m == LLAMAPARSE_ID, CATALOG_ORDER.get(m, 0)))
@@ -118,6 +123,25 @@ def get_experiment(
     return experiment_detail_out(_load(session, experiment_id), request.app.state.runner)
 
 
+@router.post(
+    "/experiments/{experiment_id}/judge", response_model=ExperimentDetailOut, status_code=202
+)
+async def judge_experiment(
+    experiment_id: str, request: Request, session: Session = Depends(get_session)
+) -> ExperimentDetailOut:
+    experiment = _load(session, experiment_id)
+    if not get_settings().judge_configured:
+        raise HTTPException(409, "Add MISTRAL to .env to enable quality checks.")
+    reference = next((r for r in experiment.runs if r.model_id == LLAMAPARSE_ID), None)
+    if reference is None or reference.status != "completed":
+        raise HTTPException(409, "A completed LlamaParse reference is required for judging.")
+    if not any(r.model_id != LLAMAPARSE_ID and r.status == "completed" for r in experiment.runs):
+        raise HTTPException(409, "Wait for a model to finish before judging its output.")
+    request.app.state.judge.submit_experiment(experiment_id, retry_failed=True)
+    session.expire_all()
+    return experiment_detail_out(_load(session, experiment_id), request.app.state.runner)
+
+
 @router.delete("/experiments/{experiment_id}", status_code=204)
 def delete_experiment(
     experiment_id: str, request: Request, session: Session = Depends(get_session)
@@ -125,6 +149,10 @@ def delete_experiment(
     experiment = _load(session, experiment_id)
     if experiment.status in ("queued", "running"):
         raise HTTPException(409, "Wait until the experiment has finished before deleting it.")
+    if any(r.judgment and r.judgment.status in ("queued", "running") for r in experiment.runs):
+        raise HTTPException(
+            409, "Wait until the quality checks finish before deleting this experiment."
+        )
     document = experiment.document
     session.delete(experiment)
     session.flush()

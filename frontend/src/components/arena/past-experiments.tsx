@@ -10,6 +10,7 @@ import { useNow } from "@/lib/use-now";
 import { usePolling } from "@/lib/use-polling";
 import type { Experiment, Run } from "@/lib/types";
 import { Spinner, StatusChip } from "@/components/ui";
+import { isJudging, JudgmentBadge } from "@/components/results/judgment";
 
 function RunChip({ run }: { run: Run }) {
   const active = run.status === "loading" || run.status === "running";
@@ -29,6 +30,7 @@ function RunChip({ run }: { run: Run }) {
       {run.status === "completed" && run.seconds_per_page != null && (
         <span className="font-mono text-faint">{formatSeconds(run.seconds_per_page)}/p</span>
       )}
+      {run.judgment && <JudgmentBadge run={run} />}
     </span>
   );
 }
@@ -41,7 +43,7 @@ function ExperimentRow({ experiment, now, onDeleted }: {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const busy = experiment.status === "queued" || experiment.status === "running";
+  const busy = experiment.status === "queued" || experiment.status === "running" || experiment.runs.some(isJudging);
   const doc = experiment.document;
   const pageLabel =
     experiment.pages.length === doc.page_count
@@ -135,7 +137,7 @@ export function PastExperiments() {
   const { data, error, loading, refresh } = usePolling(
     "experiments",
     () => api.listExperiments(),
-    (d) => (d.experiments.some((e) => e.status === "queued" || e.status === "running") ? 2500 : null),
+    (d) => (d.experiments.some((e) => e.status === "queued" || e.status === "running" || e.runs.some(isJudging)) ? 2500 : null),
   );
   const experiments = data?.experiments ?? [];
 

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request
 from .. import __version__
 from ..catalog import LLAMAPARSE_CREDITS_PER_PAGE, LLAMAPARSE_USD_PER_CREDIT, MODELS, REFERENCE
 from ..config import get_settings
+from ..runtime import profile_error, runtime_profile
 from ..schemas import HealthOut, ModelsOut
 from .serializers import model_out
 
@@ -17,7 +18,10 @@ def health(request: Request) -> HealthOut:
         status="ok",
         version=__version__,
         llamaparse_configured=settings.llamaparse_configured,
+        judge_configured=settings.judge_configured,
         local_device=registry.local_device() if settings.local_inference else None,
+        runtime_profile=runtime_profile(settings) if settings.local_inference else "disabled",
+        runtime_profile_error=profile_error(settings) if settings.local_inference else None,
         max_upload_mb=settings.max_upload_mb,
         max_pages_per_experiment=settings.max_pages_per_experiment,
     )

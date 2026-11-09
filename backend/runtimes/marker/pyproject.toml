@@ -1,0 +1,17 @@
+[project]
+name = "ocr-arena-marker-runtime"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["marker-pdf==2.1.0", "surya-ocr==0.23.0"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

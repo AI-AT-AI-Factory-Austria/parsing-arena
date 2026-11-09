@@ -4,6 +4,7 @@ import type {
   ExperimentDetail,
   Health,
   ModelsResponse,
+  SampleDocument,
 } from "./types";
 
 export class ApiError extends Error {
@@ -96,7 +97,8 @@ export const api = {
   health: () => request<Health>("/api/health"),
   models: () => request<ModelsResponse>("/api/models"),
   uploadDocument,
-  sampleDocument: () => postJson<DocumentInfo>("/api/documents/sample"),
+  samples: () => request<{ samples: SampleDocument[] }>("/api/samples"),
+  randomSample: () => request<SampleDocument>("/api/samples/random", { cache: "no-store" }),
   createExperiment: (body: { document_id: string; models: string[]; pages?: string }) =>
     postJson<ExperimentDetail>("/api/experiments", body),
   listExperiments: (limit = 50) =>
@@ -105,6 +107,8 @@ export const api = {
     request<ExperimentDetail>(`/api/experiments/${encodeURIComponent(id)}`),
   rerun: (id: string) =>
     postJson<ExperimentDetail>(`/api/experiments/${encodeURIComponent(id)}/rerun`),
+  judge: (id: string) =>
+    postJson<ExperimentDetail>(`/api/experiments/${encodeURIComponent(id)}/judge`),
   deleteExperiment: (id: string) =>
     request<void>(`/api/experiments/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
