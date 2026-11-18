@@ -2,6 +2,8 @@
 
 Request settings match ParseBench's `llamaparse_agentic_plus` pipeline:
 tier=agentic_plus, version=latest, disable_cache=True.
+The v2 response exposes running headers and footers separately; retain them in
+the page text used for display and reference judging.
 """
 
 import asyncio
@@ -23,6 +25,32 @@ TERMINAL_FAILURES = {"FAILED", "CANCELLED"}
 
 class LlamaParseError(RuntimeError):
     pass
+
+
+def page_markdown(markdown: str, header: str | None, footer: str | None) -> str:
+    """Assemble a full page without repeating a region already at its body edge.
+
+    Only whitespace is normalized for matching; the returned Markdown is kept
+    intact. A header mentioned inside the body is still a separate page region.
+    """
+    body = markdown.strip()
+    body_text = " ".join(body.split())
+    parts = []
+    for region, at_start in ((header, True), (footer, False)):
+        text = (region or "").strip()
+        if not text:
+            continue
+        region_text = " ".join(text.split())
+        already_present = body_text == region_text or (
+            body_text.startswith(region_text + " ")
+            if at_start
+            else body_text.endswith(" " + region_text)
+        )
+        if not already_present:
+            parts.append((0 if at_start else 2, text))
+    if body:
+        parts.append((1, body))
+    return "\n\n".join(text for _, text in sorted(parts))
 
 
 def _image_as_pdf(path: Path) -> bytes:
@@ -66,6 +94,7 @@ class LlamaParseEngine:
             "backend": "api",
             "tier": self.settings.llamaparse_tier,
             "base_url": self.settings.llama_cloud_base_url,
+            "page_assembly": "header_body_footer_v1",
         }
 
     async def parse(
@@ -145,12 +174,18 @@ class LlamaParseEngine:
         by_number = {remap[p.page_number]: p for p in returned}
 
         pages: list[PageOutput] = []
+        page_regions: list[dict] = []
         for number in page_numbers:
             page = by_number.get(number)
             if page is None:
                 pages.append(PageOutput(number, "", error="No result for this page."))
             elif page.success:
-                pages.append(PageOutput(number, page.markdown))
+                pages.append(
+                    PageOutput(number, page_markdown(page.markdown, page.header, page.footer))
+                )
+                page_regions.append(
+                    {"page_number": number, "header": page.header, "footer": page.footer}
+                )
             else:
                 pages.append(PageOutput(number, "", error=getattr(page, "error", "failed")))
 
@@ -162,5 +197,10 @@ class LlamaParseEngine:
         return ParseOutput(
             markdown=markdown,
             pages=pages,
-            meta={"job_id": job_id, "credits": credits, **self.describe()},
+            meta={
+                "job_id": job_id,
+                "credits": credits,
+                "page_regions": page_regions,
+                **self.describe(),
+            },
         )

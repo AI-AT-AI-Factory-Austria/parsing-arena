@@ -86,7 +86,10 @@ class OpenModelEngine:
         self.settings = settings
         self.pool = pool
         prefix = settings_prefix(model.id)
-        endpoint = getattr(settings, f"{prefix}_endpoint_url", "") if self.supports_endpoint else ""
+        endpoint = (
+            getattr(settings, f"{prefix}_endpoint_url", "")
+            if self.supports_endpoint and settings.local_device != "cpu" else ""
+        )
         self.endpoint_url: str = str(endpoint).strip()
         self.served_model: str = str(getattr(settings, f"{prefix}_served_model", "") or "")
 
@@ -110,8 +113,11 @@ class OpenModelEngine:
         missing = local_inference_missing()
         if missing:
             return missing
+        device = describe_local_device(self.settings.local_device)
+        if device.get("available") is False:
+            return device.get("detail", "The local PyTorch runtime is unavailable.")
         if self.rocm_unsupported and not self.settings.allow_unstable_rocm_models:
-            if describe_local_device(self.settings.local_device).get("runtime") == "ROCm":
+            if device.get("runtime") == "ROCm":
                 return self.rocm_unsupported
         return None
 

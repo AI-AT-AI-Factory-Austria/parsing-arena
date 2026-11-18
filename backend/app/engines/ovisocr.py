@@ -44,7 +44,7 @@ class OvisOcr3Engine(Qwen35Engine):
     )
 
     def build_local(self):
-        if self.uses_vulkan:
+        if self.uses_llama_cpp:
             return self.vulkan_backend(MAX_MODEL_LEN)
         assert self.model.hf_repo
         # Qwen3.5 linear-attention layers: one request at a time, no left padding.

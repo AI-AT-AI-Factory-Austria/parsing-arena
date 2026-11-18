@@ -38,6 +38,7 @@ export type ArenaModel = {
 };
 
 export type ModelsResponse = {
+  cpu_only: boolean;
   models: ArenaModel[];
   reference: ArenaModel;
   llamaparse_credits_per_page: number;
@@ -73,6 +74,7 @@ export type DocumentInfo = {
   media_type: string;
   size_bytes: number;
   page_count: number;
+  sha256: string;
   created_at: string;
   thumbnail_url: string;
   file_url: string;
@@ -156,6 +158,7 @@ export type Judgment = {
   verdict: Verdict | null;
   model: string;
   rubric_version: string;
+  outdated: boolean;
   reference_run_id: string;
   pages_done: number;
   pages_total: number;
@@ -186,6 +189,8 @@ export type RunDetail = Run & {
 
 export type Experiment = {
   id: string;
+  batch_id: string | null;
+  cpu_only: boolean;
   status: ExperimentStatus;
   created_at: string;
   started_at: string | null;
@@ -200,6 +205,42 @@ export type Experiment = {
 };
 
 export type ExperimentDetail = Omit<Experiment, "runs"> & { runs: RunDetail[] };
+
+export type Batch = {
+  id: string;
+  created_at: string;
+  status: ExperimentStatus;
+  cpu_only: boolean;
+  documents: DocumentInfo[];
+  page_count: number;
+  model_count: number;
+  completed_runs: number;
+  total_runs: number;
+  judging: boolean;
+};
+
+export type ModelAggregate = {
+  model_id: string;
+  model_name: string;
+  kind: "open" | "reference";
+  status: ExperimentStatus;
+  pages_total: number;
+  pages_completed: number;
+  pages_failed: number;
+  timed_pages: number;
+  parse_seconds: number | null;
+  seconds_per_page: number | null;
+  judged_pages: number;
+  excellent: number;
+  passed: number;
+  failed: number;
+  pass_rate: number | null;
+};
+
+export type BatchDetail = Batch & {
+  experiments: ExperimentDetail[];
+  aggregates: ModelAggregate[];
+};
 
 export type SampleDocument = {
   id: string;

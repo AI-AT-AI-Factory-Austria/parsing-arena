@@ -85,6 +85,16 @@ def stop_windows_process(pid, backend):
 
 
 def configure_surya_cleanup():
+    if os.environ.get("ARENA_CPU_ONLY") == "1":
+        from surya.inference.backends import spawn
+
+        # Never attach to a GPU-backed server left by another Marker run/process.
+        # Isolate every worker's server sentinels, including auxiliary models.
+        original_sentinel = spawn._sentinel_path
+        original_lock = spawn._lock_path
+        suffix = f"-arena-cpu-{os.getpid()}"
+        spawn._sentinel_path = lambda backend: original_sentinel(backend + suffix)
+        spawn._lock_path = lambda backend: original_lock(backend + suffix)
     if os.name == "nt":
         # On Windows os.kill(pid, 0) sends CTRL_C_EVENT, unlike POSIX's liveness probe.
         from surya.inference.backends import spawn
@@ -114,7 +124,9 @@ class Marker:
             "preset": self.preset,
             "version": version("marker-pdf"),
             "surya_version": version("surya-ocr"),
-            "device": "cpu" if self.preset == "marker_fast" else "llama.cpp",
+            "device": "cpu"
+            if self.preset == "marker_fast" or os.environ.get("ARENA_CPU_ONLY") == "1"
+            else "llama.cpp",
             "surya_checkpoint": SURYA_CHECKPOINT if self.preset == "marker_balanced" else None,
             "inference_backend": "llamacpp" if self.preset == "marker_balanced" else None,
             "gguf_model": "datalab-to/surya-ocr-2.5-gguf/surya-2.5.gguf"

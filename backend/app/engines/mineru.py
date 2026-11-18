@@ -13,6 +13,7 @@ from typing import Any
 from PIL import Image
 
 from .backends.transformers_local import (
+    cpu_model_options,
     describe_local_device,
     free_accelerator_memory,
     patch_embed_convs_as_matmul,
@@ -63,6 +64,7 @@ class MinerURuntime:
         self.timeout_s = timeout_s
         self.device: str | None = None
         self.dtype_name: str | None = None
+        self.attention: str | None = None
         self.client: Any = None
 
     @property
@@ -110,7 +112,10 @@ class MinerURuntime:
             tied = text_config.tie_word_embeddings
         text_config.tie_word_embeddings = tied
         config.tie_word_embeddings = tied
-        model = Qwen2VLForConditionalGeneration.from_pretrained(path, config=config, dtype=dtype)
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            path, config=config, dtype=dtype, **cpu_model_options(device, dtype)
+        )
+        self.attention = model.config._attn_implementation
         patch_embed_convs_as_matmul(model)
         model.to(device)
         model.eval()
@@ -142,6 +147,7 @@ class MinerURuntime:
                 "backend": "transformers",
                 "device": self.device or info.get("device"),
                 "dtype": self.dtype_name,
+                "attention": self.attention,
                 "max_batch": self.batch_size,
             }
         )

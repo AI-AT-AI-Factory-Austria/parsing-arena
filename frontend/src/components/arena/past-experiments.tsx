@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { ChevronRight, History, Trash2, TriangleAlert } from "lucide-react";
+import { ChevronRight, History, Layers3, Trash2, TriangleAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatRelative, formatSeconds, pluralize } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 import { usePolling } from "@/lib/use-polling";
-import type { Experiment, Run } from "@/lib/types";
+import type { Batch, Experiment, Run } from "@/lib/types";
 import { Spinner, StatusChip } from "@/components/ui";
 import { isJudging, JudgmentBadge } from "@/components/results/judgment";
 
@@ -132,14 +132,36 @@ function ExperimentRow({ experiment, now, onDeleted }: {
   );
 }
 
+function BatchRow({ batch, now }: { batch: Batch; now: number | null }) {
+  return <li className="group">
+    <Link href={`/batches/${batch.id}`} className="flex items-center gap-4 p-4 transition-colors hover:bg-smoke/70 sm:gap-5 sm:px-6">
+      <span className="hidden size-12 shrink-0 place-items-center rounded-xl bg-brand-wash text-brand sm:grid"><Layers3 aria-hidden className="size-5" /></span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{batch.documents.length === 1 ? batch.documents[0].filename : `${batch.documents.length} documents · ${batch.documents[0].filename}`}</p>
+        <p className="mt-1 text-sm text-faint">Batch · {pluralize(batch.page_count, "page")} · {pluralize(batch.model_count, "model")} · {formatRelative(batch.created_at, now)}{batch.cpu_only && " · CPU only"}</p>
+        <p className="mt-2 text-xs text-muted">{batch.completed_runs} / {batch.total_runs} document–model runs finished{batch.judging && " · Judging in progress"}</p>
+      </div>
+      <StatusChip status={batch.status} />
+      <ChevronRight aria-hidden className="size-5 shrink-0 text-stone" />
+    </Link>
+  </li>;
+}
+
 export function PastExperiments() {
   const now = useNow();
   const { data, error, loading, refresh } = usePolling(
     "experiments",
-    () => api.listExperiments(),
-    (d) => (d.experiments.some((e) => e.status === "queued" || e.status === "running" || e.runs.some(isJudging)) ? 2500 : null),
+    async () => {
+      const [experiments, batches] = await Promise.all([api.listExperiments(), api.listBatches()]);
+      return { ...experiments, ...batches };
+    },
+    (d) => (d.experiments.some((e) => e.status === "queued" || e.status === "running" || e.runs.some(isJudging)) || d.batches.some((b) => b.status === "queued" || b.status === "running" || b.judging) ? 2500 : null),
   );
   const experiments = data?.experiments ?? [];
+  const entries = [
+    ...experiments.map((value) => ({ kind: "experiment" as const, value })),
+    ...(data?.batches ?? []).map((value) => ({ kind: "batch" as const, value })),
+  ].sort((a, b) => new Date(b.value.created_at).getTime() - new Date(a.value.created_at).getTime());
 
   return (
     <section aria-labelledby="past-heading">
@@ -150,8 +172,8 @@ export function PastExperiments() {
             Past experiments
           </h2>
         </div>
-        {experiments.length > 0 && (
-          <p className="text-sm text-faint">{pluralize(experiments.length, "experiment")}</p>
+        {entries.length > 0 && (
+          <p className="text-sm text-faint">{pluralize(entries.length, "run")}</p>
         )}
       </div>
 
@@ -174,7 +196,7 @@ export function PastExperiments() {
             <TriangleAlert aria-hidden className="size-4" /> {error.message}
           </p>
         )}
-        {data && experiments.length === 0 && (
+        {data && entries.length === 0 && (
           <div className="flex flex-col items-center px-6 py-14 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-fog text-muted">
               <History aria-hidden className="size-5" />
@@ -185,12 +207,12 @@ export function PastExperiments() {
             </p>
           </div>
         )}
-        {experiments.length > 0 && (
+        {entries.length > 0 && (
           <ul className="divide-y divide-line">
-            {experiments.map((experiment) => (
+            {entries.map((entry) => entry.kind === "batch" ? <BatchRow key={entry.value.id} batch={entry.value} now={now} /> : (
               <ExperimentRow
-                key={experiment.id}
-                experiment={experiment}
+                key={entry.value.id}
+                experiment={entry.value}
                 now={now}
                 onDeleted={refresh}
               />

@@ -53,6 +53,7 @@ class ModelOut(BaseModel):
 
 
 class ModelsOut(BaseModel):
+    cpu_only: bool = False
     models: list[ModelOut]
     reference: ModelOut
     llamaparse_credits_per_page: int
@@ -78,6 +79,7 @@ class DocumentOut(BaseModel):
     media_type: str
     size_bytes: int
     page_count: int
+    sha256: str
     created_at: UtcDatetime
     thumbnail_url: str
     file_url: str
@@ -113,6 +115,7 @@ class JudgmentOut(BaseModel):
     verdict: Verdict | None
     model: str
     rubric_version: str
+    outdated: bool = False
     reference_run_id: str
     pages_done: int
     pages_total: int
@@ -147,11 +150,13 @@ class RunDetailOut(RunOut):
 
 class ExperimentOut(BaseModel):
     id: str
+    batch_id: str | None = None
     status: str
     created_at: UtcDatetime
     started_at: UtcDatetime | None
     finished_at: UtcDatetime | None
     pages: list[int]
+    cpu_only: bool = False
     error: str | None
     queue_position: int | None
     document: DocumentOut
@@ -172,6 +177,63 @@ class ExperimentCreate(BaseModel):
     document_id: str
     models: list[str] = Field(min_length=1)
     pages: str | None = Field(default=None, description="e.g. '1-3,5'; empty = all pages")
+    cpu_only: bool = False
+
+
+MAX_BATCH_PAGES = 12
+
+
+class BatchDocumentCreate(BaseModel):
+    document_id: str
+    pages: list[Annotated[int, Field(strict=True, ge=1)]] = Field(
+        min_length=1, max_length=MAX_BATCH_PAGES
+    )
+
+
+class BatchCreate(BaseModel):
+    documents: list[BatchDocumentCreate] = Field(min_length=1, max_length=MAX_BATCH_PAGES)
+    models: list[str] = Field(min_length=1)
+    cpu_only: bool = False
+
+
+class ModelAggregateOut(BaseModel):
+    model_id: str
+    model_name: str
+    kind: str
+    status: str
+    pages_total: int
+    pages_completed: int
+    pages_failed: int
+    timed_pages: int
+    parse_seconds: float | None
+    seconds_per_page: float | None
+    judged_pages: int
+    excellent: int
+    passed: int
+    failed: int
+    pass_rate: float | None
+
+
+class BatchOut(BaseModel):
+    id: str
+    created_at: UtcDatetime
+    status: str
+    cpu_only: bool
+    documents: list[DocumentOut]
+    page_count: int
+    model_count: int
+    completed_runs: int
+    total_runs: int
+    judging: bool
+
+
+class BatchDetailOut(BatchOut):
+    experiments: list[ExperimentDetailOut]
+    aggregates: list[ModelAggregateOut]
+
+
+class BatchList(BaseModel):
+    batches: list[BatchOut]
 
 
 class SampleOut(BaseModel):

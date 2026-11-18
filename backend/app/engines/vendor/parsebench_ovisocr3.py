@@ -1,6 +1,6 @@
 """OvisOCR3 prompts and output normalization.
 
-[ocr-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
+[parsing-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
 ``src/parse_bench/inference/providers/parse/ovisocr3.py`` (prompts, region parsing and
 markdown), ``_layout_utils.LABEL_MAP``, ``mistral_ocr._convert_pipe_tables_to_html`` and
 ``evaluation/metrics/parse/chart_json_to_html.py``. The code is unchanged;

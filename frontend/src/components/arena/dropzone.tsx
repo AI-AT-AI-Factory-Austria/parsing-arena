@@ -19,19 +19,21 @@ export function validateFile(file: File, maxMb: number): string | null {
 }
 
 export function Dropzone({
-  onFile,
+  onFiles,
   onSample,
   upload,
   maxMb,
   disabled,
   sampleLoading = false,
+  compact = false,
 }: {
-  onFile: (file: File) => void;
+  onFiles: (files: File[]) => void;
   onSample: () => void;
   upload: { name: string; progress: number } | null;
   maxMb: number;
   disabled?: boolean;
   sampleLoading?: boolean;
+  compact?: boolean;
 }) {
   const inputId = useId();
   const [dragging, setDragging] = useState(false);
@@ -40,7 +42,7 @@ export function Dropzone({
   if (upload) {
     const processing = upload.progress >= 1;
     return (
-      <div className="flex min-h-[340px] flex-col items-center justify-center rounded-[var(--radius-panel)] border border-line bg-white p-10 text-center">
+      <div className={clsx("flex flex-col items-center justify-center rounded-[var(--radius-panel)] border border-line bg-white p-6 text-center", compact ? "min-h-[180px]" : "min-h-[300px]")}>
         <span className="grid size-14 place-items-center rounded-2xl bg-brand-wash text-brand">
           <FileText aria-hidden className="size-6" />
         </span>
@@ -61,8 +63,7 @@ export function Dropzone({
   }
 
   const pick = (files: FileList | null) => {
-    const file = files?.[0];
-    if (file) onFile(file);
+    if (files?.length && !disabled) onFiles(Array.from(files));
   };
 
   return (
@@ -87,34 +88,37 @@ export function Dropzone({
         if (!disabled) pick(e.dataTransfer.files);
       }}
       className={clsx(
-        "relative flex min-h-[340px] flex-col items-center justify-center rounded-[var(--radius-panel)] border-2 border-dashed p-10 text-center transition-colors",
+        "relative flex flex-col items-center justify-center rounded-[var(--radius-panel)] border-2 border-dashed text-center transition-colors",
+        compact ? "min-h-[180px] p-5" : "min-h-[300px] p-8",
         dragging ? "border-brand bg-brand-wash" : "border-ash bg-white hover:border-stone",
       )}
     >
       <span
         className={clsx(
-          "grid size-16 place-items-center rounded-[20px] transition-colors",
+          "grid place-items-center rounded-[20px] transition-colors",
+          compact ? "size-10" : "size-16",
           dragging ? "bg-brand text-white" : "bg-brand-soft text-brand",
         )}
       >
-        <CloudUpload aria-hidden className="size-7" />
+        <CloudUpload aria-hidden className={compact ? "size-5" : "size-7"} />
       </span>
-      <p className="mt-6 text-xl tracking-tight">
-        {dragging ? "Drop to upload" : "Drag and drop a document here"}
+      <p className={clsx("tracking-tight", compact ? "mt-3 text-base" : "mt-6 text-xl")}>
+        {dragging ? "Drop to add documents" : compact ? "Add more documents to your batch" : "Drag and drop your documents here"}
       </p>
       <p className="mt-2 text-sm text-muted">
-        PDF, PNG, JPG, WebP or TIFF · up to {maxMb} MB
+        PDF, PNG, JPG, WebP or TIFF · up to {maxMb} MB each
       </p>
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+      <div className={clsx("flex flex-wrap items-center justify-center gap-3", compact ? "mt-4" : "mt-7")}>
         <label
           htmlFor={inputId}
           aria-disabled={disabled}
           className="btn btn-dark cursor-pointer has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand"
         >
-          Choose a file
+          {compact ? "Add documents" : "Choose files"}
           <input
             id={inputId}
             type="file"
+            multiple
             accept={ACCEPT}
             disabled={disabled}
             className="sr-only"

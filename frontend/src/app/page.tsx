@@ -65,7 +65,7 @@ export default function HomePage() {
       <section className="relative overflow-hidden bg-fog">
         <div className="mx-auto grid max-w-[1320px] items-center gap-14 px-4 pb-20 pt-32 sm:px-6 lg:grid-cols-[1.02fr_1fr] lg:gap-10 lg:pb-28 lg:pt-40">
           <div className="max-w-2xl">
-            <p className="eyebrow">OCR Arena · by AI Factory Austria</p>
+            <p className="eyebrow">Parsing Arena · by AI Factory Austria</p>
             <h1 className="mt-5 text-[2.6rem] leading-[1.04] tracking-[-0.025em] text-ink sm:text-6xl lg:text-[4.1rem]">
               Find the open OCR model for your sensitive documents
             </h1>
@@ -110,7 +110,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1320px] px-4 pt-20 sm:px-6 lg:pt-28">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="eyebrow">Why OCR Arena</p>
+              <p className="eyebrow">Why Parsing Arena</p>
               <h2
                 id="principles-heading"
                 className="mt-4 max-w-2xl text-3xl leading-tight tracking-[-0.02em] sm:text-[2.6rem]"
@@ -199,13 +199,13 @@ export default function HomePage() {
                 id="hpc-heading"
                 className="mt-4 text-3xl leading-tight tracking-[-0.02em] sm:text-[2.6rem]"
               >
-                A large corpus? Testing here is step one. Parsing it on HPC is step two.
+                Find the right model. Scale up with HPC.
               </h2>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/85">
                 Once you know which model reads your documents best, AI Factory Austria (AI:AT)
-                gives you access to European high-performance computing to run it over large
-                document collections, with high-quality parsing at a scale a single GPU can&apos;t
-                handle, plus onboarding and technical support.
+                can support you in applying for access to European high-performance computing.
+                Onboarding and technical support help you prepare to run your chosen model over
+                large document collections.
               </p>
               <ol className="mt-8 space-y-3">
                 {HPC_STEPS.map((step, i) => (

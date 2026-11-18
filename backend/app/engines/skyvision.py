@@ -119,7 +119,7 @@ class SkyVisionRuntime:
                 self.unload()
                 raise RuntimeError("Unexpected response from the SkyVision worker.")
             if "error" in response:
-                raise RuntimeError(str(response["error"]))
+                raise RuntimeError(str(response["error"]).replace("OCR Arena:", "Parsing Arena:"))
             return response["result"]
 
     def _tool(self, name: str, arguments: dict) -> dict:
@@ -128,7 +128,10 @@ class SkyVisionRuntime:
             c.get("text", "") for c in result.get("content", []) if c.get("type") == "text"
         )
         if result.get("isError"):
-            raise RuntimeError(text or "SkyVision inference failed.")
+            # Older installed workers can still emit the previous project name.
+            raise RuntimeError(
+                text.replace("OCR Arena:", "Parsing Arena:") or "SkyVision inference failed."
+            )
         document = json.loads(text)
         if not isinstance(document, dict):
             raise RuntimeError("SkyVision returned an invalid document.")
@@ -201,7 +204,7 @@ class SkyVisionRuntime:
                 {
                     "protocolVersion": "2025-03-26",
                     "capabilities": {},
-                    "clientInfo": {"name": "ocr-arena", "version": "1.0"},
+                    "clientInfo": {"name": "parsing-arena", "version": "1.0"},
                 },
             )
             result = self._tool(

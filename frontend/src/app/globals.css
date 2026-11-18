@@ -290,6 +290,14 @@
   line-height: 1.45;
   overflow-wrap: normal;
 }
+.markdown caption {
+  caption-side: top;
+  padding: 0.65rem;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-weight: 500;
+  text-align: left;
+}
 .markdown :is(th, td) {
   border-bottom: 1px solid var(--color-line);
   border-right: 1px solid var(--color-line);

@@ -1,4 +1,6 @@
 import type {
+  Batch,
+  BatchDetail,
   DocumentInfo,
   Experiment,
   ExperimentDetail,
@@ -95,14 +97,20 @@ function uploadDocument(
 
 export const api = {
   health: () => request<Health>("/api/health"),
-  models: () => request<ModelsResponse>("/api/models"),
+  models: (cpuOnly = false) => request<ModelsResponse>(`/api/models?cpu_only=${cpuOnly}`),
   uploadDocument,
   samples: () => request<{ samples: SampleDocument[] }>("/api/samples"),
   randomSample: () => request<SampleDocument>("/api/samples/random", { cache: "no-store" }),
-  createExperiment: (body: { document_id: string; models: string[]; pages?: string }) =>
+  createExperiment: (body: { document_id: string; models: string[]; pages?: string; cpu_only?: boolean }) =>
     postJson<ExperimentDetail>("/api/experiments", body),
   listExperiments: (limit = 50) =>
-    request<{ experiments: Experiment[] }>(`/api/experiments?limit=${limit}`),
+    request<{ experiments: Experiment[] }>(`/api/experiments?limit=${limit}&standalone_only=true`),
+  createBatch: (body: { documents: { document_id: string; pages: number[] }[]; models: string[]; cpu_only: boolean }) =>
+    postJson<BatchDetail>("/api/batches", body),
+  batch: (id: string) => request<BatchDetail>(`/api/batches/${encodeURIComponent(id)}`),
+  listBatches: () => request<{ batches: Batch[] }>("/api/batches"),
+  rerunBatch: (id: string) => postJson<BatchDetail>(`/api/batches/${encodeURIComponent(id)}/rerun`),
+  deleteBatch: (id: string) => request<void>(`/api/batches/${encodeURIComponent(id)}`, { method: "DELETE" }),
   experiment: (id: string) =>
     request<ExperimentDetail>(`/api/experiments/${encodeURIComponent(id)}`),
   rerun: (id: string) =>

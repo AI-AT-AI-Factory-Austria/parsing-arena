@@ -1,6 +1,6 @@
 """florin-parser-nano — ParseBench provider.
 
-[ocr-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167,
+[parsing-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167,
 ``src/parse_bench/inference/providers/parse/florin_parser_nano.py``. Only the
 emission functions are kept (``FLORIN_NATIVE_LAYOUT_CATEGORY_MAP`` and
 ``build_markdown``); the provider class, the engine subclass and the module

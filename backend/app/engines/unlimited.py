@@ -76,8 +76,11 @@ def parse_document(text: str, numbers: list[int]) -> list[PageOutput]:
                 raise RuntimeError(f"Invalid Unlimited-OCR coordinates on page {number}.")
             layout.append(element(category, bbox, content, index))
             if content:
-                if block["level"] and not content.startswith("#"):
-                    content = "#" * int(block["level"]) + " " + content
+                # The model also emits title blocks without LEVEL tokens. Upstream
+                # renders those as H1; dropping the label loses detected structure.
+                level = block["level"] or ("1" if category == "title" else None)
+                if level and not content.startswith("#"):
+                    content = "#" * int(level) + " " + content
                 markdown.append(content)
         pages.append(PageOutput(number, "\n\n".join(markdown), elements=layout))
     return pages
@@ -126,7 +129,11 @@ class UnlimitedOcrEngine(OpenModelEngine):
 
     @property
     def runtime_label(self) -> str:
-        gpu = "AMD Vulkan" if runtime_profile(self.settings) == "windows-amd" else "CUDA"
+        if self.settings.local_device == "cpu":
+            return "CPU · multi-page · BF16 GGUF"
+        gpu = {"windows-amd": "AMD Vulkan", "linux-nvidia": "CUDA"}.get(
+            runtime_profile(self.settings), "Local GPU"
+        )
         return f"{gpu} · multi-page · BF16 GGUF"
 
     @property
@@ -148,11 +155,9 @@ class UnlimitedOcrEngine(OpenModelEngine):
             return "Local inference is disabled."
         if error := profile_error(self.settings):
             return error
-        if self.settings.local_device == "cpu":
-            return "Unlimited-OCR 2 currently requires the local Vulkan or CUDA GPU runtime."
         profile = runtime_profile(self.settings)
-        if profile not in {"windows-amd", "linux-nvidia"}:
-            return "Unlimited-OCR 2 supports Windows/AMD Vulkan or Linux/NVIDIA CUDA."
+        if profile not in {"cpu", "windows-amd", "linux-nvidia"}:
+            return "Choose CPU mode, Windows/AMD Vulkan or Linux/NVIDIA CUDA."
         installed = installed_runtime(self.settings)
         if installed is None:
             return (
@@ -160,7 +165,7 @@ class UnlimitedOcrEngine(OpenModelEngine):
                 "uv run --no-project --script backend/scripts/install-unlimited.py"
             )
         expected = "Vulkan" if profile == "windows-amd" else "CUDA"
-        if installed[1].get("backend") != expected:
+        if profile != "cpu" and installed[1].get("backend") != expected:
             return f"The Unlimited-OCR runtime must be built for {expected} on this machine."
         return None
 

@@ -5,6 +5,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from .backends.transformers_local import (
+    cpu_model_options,
     describe_local_device,
     free_accelerator_memory,
     patch_embed_convs_as_matmul,
@@ -66,6 +67,7 @@ class GlmOcrRuntime:
         self.repo, self.revision = repo, revision
         self.device_preference, self.dtype_preference = device, dtype
         self.device = self.dtype = None
+        self.attention = "sdpa"
         self.model = self.processor = None
 
     @property
@@ -79,9 +81,12 @@ class GlmOcrRuntime:
         torch.set_num_threads(4)
         self.device = resolve_device(self.device_preference)
         self.dtype = resolve_dtype(self.dtype_preference, self.device)
+        self.attention = cpu_model_options(self.device, self.dtype).get(
+            "attn_implementation", "sdpa"
+        )
         self.processor = AutoProcessor.from_pretrained(self.repo, revision=self.revision)
         self.model = GlmOcrForConditionalGeneration.from_pretrained(
-            self.repo, revision=self.revision, dtype=self.dtype, attn_implementation="sdpa"
+            self.repo, revision=self.revision, dtype=self.dtype, attn_implementation=self.attention
         )
         patch_embed_convs_as_matmul(self.model)
         patch_merger_as_matmul(self.model)
@@ -105,7 +110,7 @@ class GlmOcrRuntime:
             "prompt": PROMPT,
             "max_new_tokens": MAX_NEW_TOKENS,
             "do_sample": False,
-            "attention": "sdpa",
+            "attention": self.attention,
             "vision_patch_and_merger": "equivalent linear projections",
             "layout_model": None,
             "output_format": "full-page text / Markdown",

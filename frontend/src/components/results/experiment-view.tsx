@@ -6,10 +6,12 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, FileQuestion, RotateCcw, Scale, Trash2, TriangleAlert, WifiOff } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { fileKind, formatDateTime, formatSeconds, pluralize } from "@/lib/format";
+import { sortModelsBySize } from "@/lib/model-presentation";
 import { useNow } from "@/lib/use-now";
 import { usePolling } from "@/lib/use-polling";
 import type { ArenaModel, ExperimentDetail } from "@/lib/types";
-import { Spinner, StatusChip } from "@/components/ui";
+import { Chip, Spinner, StatusChip } from "@/components/ui";
+import { JudgingConfirmation } from "@/components/judging-confirmation";
 import { Comparison } from "./comparison";
 import { RunBoard } from "./run-board";
 import { isJudging } from "./judgment";
@@ -54,6 +56,7 @@ export function ExperimentView({ id }: { id: string }) {
   const catalog = usePolling("models", () => api.models(), () => null);
   const [busy, setBusy] = useState<"rerun" | "delete" | "judge" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmJudging, setConfirmJudging] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState("");
 
@@ -82,22 +85,34 @@ export function ExperimentView({ id }: { id: string }) {
     return <ExperimentSkeleton />;
   }
 
-  const models = new Map<string, ArenaModel>();
-  if (catalog.data) {
-    for (const m of [...catalog.data.models, catalog.data.reference]) models.set(m.id, m);
-  }
+  const orderedModels = catalog.data
+    ? [catalog.data.reference, ...sortModelsBySize(catalog.data.models)]
+    : [];
+  const models = new Map<string, ArenaModel>(orderedModels.map((model) => [model.id, model]));
+  const modelOrder = new Map(orderedModels.map((model, index) => [model.id, index]));
+  // Match the picker in every results view, including saved runs and equal-size models.
+  // Keep historical models that are no longer in the catalog at the end.
+  const displayedExperiment = {
+    ...experiment,
+    runs: [...experiment.runs].sort((a, b) =>
+      (modelOrder.get(a.model_id) ?? Number.MAX_SAFE_INTEGER)
+      - (modelOrder.get(b.model_id) ?? Number.MAX_SAFE_INTEGER),
+    ),
+  };
   const doc = experiment.document;
   const active = isActive(experiment);
   const judging = experiment.runs.some(isJudging);
   const canJudge = experiment.judge_configured && experiment.runs.some(
     (r) => r.kind === "reference" && r.status === "completed",
   ) && experiment.runs.some(
-    (r) => r.kind !== "reference" && r.status === "completed" && (!r.judgment || r.judgment.status === "failed"),
+    (r) => r.kind !== "reference" && r.status === "completed" && (!r.judgment || r.judgment.status === "failed" || r.judgment.outdated),
   );
   const allPages = experiment.pages.length === doc.page_count;
-  const selectedRun = experiment.runs.find((run) => run.id === selectedRunId) ?? experiment.runs[0];
+  const selectedRun = displayedExperiment.runs.find((run) => run.id === selectedRunId)
+    ?? displayedExperiment.runs[0];
 
   const rerun = async () => {
+    if (active || busy !== null) return;
     setBusy("rerun");
     setActionError(null);
     try {
@@ -137,6 +152,17 @@ export function ExperimentView({ id }: { id: string }) {
 
   return (
     <div className="space-y-8">
+      {confirmJudging && (
+        <JudgingConfirmation
+          filename={doc.filename}
+          pageCount={experiment.pages.length}
+          onCancel={() => setConfirmJudging(false)}
+          onConfirm={() => {
+            setConfirmJudging(false);
+            void rerun();
+          }}
+        />
+      )}
       <div>
         <Link
           href="/arena"
@@ -157,10 +183,11 @@ export function ExperimentView({ id }: { id: string }) {
             </a>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="break-words text-3xl tracking-[-0.02em] sm:text-4xl">
+                <h1 className="min-w-0 max-w-full break-words text-3xl tracking-[-0.02em] sm:text-4xl">
                   {doc.filename}
                 </h1>
                 <StatusChip status={experiment.status} />
+                {experiment.cpu_only && <Chip tone="outline">CPU only</Chip>}
               </div>
               <p className="mt-2 text-sm text-muted">
                 {fileKind(doc.media_type)} ·{" "}
@@ -181,7 +208,13 @@ export function ExperimentView({ id }: { id: string }) {
             )}
             <button
               type="button"
-              onClick={() => void rerun()}
+              onClick={() => {
+                if (experiment.runs.some((run) => run.kind === "reference")) {
+                  setConfirmJudging(true);
+                } else {
+                  void rerun();
+                }
+              }}
               disabled={active || busy !== null}
               title={active ? "Available once this run has finished" : undefined}
               className="btn btn-outline btn-sm"
@@ -247,7 +280,7 @@ export function ExperimentView({ id }: { id: string }) {
       </div>
 
       <Comparison
-        experiment={experiment}
+        experiment={displayedExperiment}
         models={models}
         selectedRunId={selectedRun?.id ?? ""}
         onSelectRun={setSelectedRunId}
@@ -256,7 +289,7 @@ export function ExperimentView({ id }: { id: string }) {
       />
 
       <RunBoard
-        experiment={experiment}
+        experiment={displayedExperiment}
         models={models}
         now={now}
         selectedRunId={selectedRun?.id ?? ""}

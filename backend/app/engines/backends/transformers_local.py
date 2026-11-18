@@ -39,6 +39,7 @@ from PIL import Image
 os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 
 logger = logging.getLogger(__name__)
+_torch_import_error: str | None = None
 
 
 class LocalInferenceError(RuntimeError):
@@ -49,6 +50,8 @@ def local_inference_missing() -> str | None:
     """Return why local inference cannot run, or None when the packages exist."""
     import importlib.util
 
+    if _torch_import_error:
+        return _torch_import_error
     if importlib.util.find_spec("torch") is None:
         return "PyTorch is not installed (run scripts/install-torch)"
     if importlib.util.find_spec("transformers") is None:
@@ -81,18 +84,60 @@ def resolve_dtype(preference: str, device: str):
         return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     if device == "mps":
         return torch.float16
+    if device == "cpu":
+        # Use native BF16 instructions when the CPU and PyTorch's oneDNN build
+        # support them. This avoids the very slow float32 BLAS path in some
+        # Windows/ROCm wheels. Older/unsupported CPUs retain float32.
+        capabilities = getattr(torch.cpu, "get_capabilities", lambda: {})()
+        if (
+            torch.backends.mkldnn.is_available()
+            and torch.backends.mkldnn.enabled
+            and (capabilities.get("avx512_bf16") or capabilities.get("amx_bf16"))
+        ):
+            return torch.bfloat16
     return torch.float32
+
+
+def cpu_model_options(device: str, dtype) -> dict[str, str]:
+    """Avoid the slow CPU flash-SDPA path in Windows ROCm builds.
+
+    Transformers' standard eager attention uses native BF16 matrix operations.
+    This keeps the same weights and attention formula, at higher memory use.
+    Other platforms and GPU runs retain their normal attention selection.
+    """
+    import torch
+
+    if (
+        device == "cpu"
+        and sys.platform == "win32"
+        and torch.version.hip
+        and dtype == torch.bfloat16
+    ):
+        return {"attn_implementation": "eager"}
+    return {}
 
 
 def describe_local_device(preference: str = "auto") -> dict[str, Any]:
     """Name the accelerator local models would run on (cached; imports torch)."""
+    global _torch_import_error
     with _device_info_lock:
         if preference in _device_info:
             return dict(_device_info[preference])
         missing = local_inference_missing()
         if missing:
             return {"available": False, "detail": missing}
-        import torch
+        try:
+            import torch
+        except (ImportError, OSError) as exc:
+            _torch_import_error = (
+                "The PyTorch runtime could not be loaded. Check the installed GPU "
+                "libraries and operating-system application-control logs, then restart "
+                "the backend. Saved results remain available."
+            )
+            logger.warning("PyTorch initialization failed (%s)", type(exc).__name__)
+            info = {"available": False, "detail": _torch_import_error}
+            _device_info[preference] = info
+            return dict(info)
 
         device = resolve_device(preference)
         info: dict[str, Any] = {"available": True, "device": device, "torch": torch.__version__}
@@ -216,7 +261,7 @@ class LocalVisionModel:
         processor = AutoProcessor.from_pretrained(self.repo, revision=self.revision)
         processor.tokenizer.padding_side = "left"
         model = AutoModelForImageTextToText.from_pretrained(
-            self.repo, revision=self.revision, dtype=dtype
+            self.repo, revision=self.revision, dtype=dtype, **cpu_model_options(device, dtype)
         )
         patch_embed_convs_as_matmul(model)
         model.to(device)
@@ -265,6 +310,9 @@ class LocalVisionModel:
                 "backend": "transformers",
                 "device": self.device or info.get("device"),
                 "dtype": self.dtype_name,
+                "attention": getattr(
+                    getattr(self._model, "config", None), "_attn_implementation", None
+                ),
                 "max_batch": self.max_batch,
             }
         )

@@ -15,6 +15,8 @@ import "katex/dist/katex.min.css";
 
 const schema = {
   ...defaultSchema,
+  // Preserve table captions from parser HTML instead of leaving bare text inside <table>.
+  tagNames: [...(defaultSchema.tagNames ?? []), "caption"],
   attributes: {
     ...defaultSchema.attributes,
     code: [["className", /^language-./, "math-inline", "math-display"]],

@@ -1,6 +1,7 @@
 from ..catalog import ArenaModel, get_model
 from ..config import get_settings
 from ..engines.registry import EngineRegistry
+from ..judge import RUBRIC_VERSION
 from ..models import Document, Experiment, ModelRun
 from ..runner import Runner
 from ..schemas import (
@@ -46,6 +47,7 @@ def document_out(document: Document) -> DocumentOut:
         media_type=document.media_type,
         size_bytes=document.size_bytes,
         page_count=document.page_count,
+        sha256=document.sha256,
         created_at=document.created_at,
         thumbnail_url=f"/api/documents/{document.id}/thumbnail",
         file_url=f"/api/documents/{document.id}/file",
@@ -79,6 +81,10 @@ def _run_fields(run: ModelRun) -> dict:
                 verdict=run.judgment.verdict,
                 model=run.judgment.model,
                 rubric_version=run.judgment.rubric_version,
+                outdated=(
+                    run.judgment.status == "completed"
+                    and run.judgment.rubric_version != RUBRIC_VERSION
+                ),
                 reference_run_id=run.judgment.reference_run_id,
                 pages_done=len(run.judgment.page_results),
                 pages_total=run.judgment.pages_total,
@@ -107,11 +113,13 @@ def run_detail_out(run: ModelRun) -> RunDetailOut:
 def experiment_out(experiment: Experiment, runner: Runner) -> ExperimentOut:
     return ExperimentOut(
         id=experiment.id,
+        batch_id=experiment.batch_id,
         status=experiment.status,
         created_at=experiment.created_at,
         started_at=experiment.started_at,
         finished_at=experiment.finished_at,
         pages=list(experiment.pages),
+        cpu_only=experiment.cpu_only,
         error=experiment.error,
         queue_position=runner.queue_position(experiment.id),
         document=document_out(experiment.document),

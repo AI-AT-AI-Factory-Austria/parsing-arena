@@ -5,7 +5,7 @@ import { formatSeconds } from "@/lib/format";
 import type { ArenaModel, ExperimentDetail, Run } from "@/lib/types";
 import { ProgressBar, StatusChip } from "@/components/ui";
 import { runFraction, runPhaseText } from "./run-progress";
-import { JudgmentBadge } from "./judgment";
+import { JudgmentSummary } from "./judgment";
 
 function elapsed(run: Run, now: number | null): number | null {
   if (!run.started_at || now === null) return null;
@@ -15,6 +15,7 @@ function elapsed(run: Run, now: number | null): number | null {
 function backendText(run: Run): string | null {
   const m = run.meta;
   if (run.kind === "reference") return m.tier ? `LlamaParse API · ${m.tier}` : "LlamaParse API";
+  if (m.cpu_only) return `CPU only${m.backend ? ` · ${m.backend}` : ""}`;
   if (m.backend === "endpoint") return "vLLM endpoint";
   if (m.backend === "pypdf") return "Text layer only · no model";
   if (m.backend === "tesseract") return `Tesseract ${m.version ?? ""} · ${m.lang ?? "eng"} · CPU`;
@@ -51,17 +52,17 @@ export function RunBoard({
         <h2 className="shrink-0 text-lg tracking-tight">Speed & quality</h2>
         <p className="max-w-3xl text-sm text-faint">
           Open models run one after another on the same hardware; model loading is not counted as
-          parse time. Quality is checked against LlamaParse; the worst page sets the overall verdict.
+          parse time. Quality is checked per page against LlamaParse; Excellent and Pass count as passed.
         </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] table-fixed text-left text-sm">
           <colgroup>
-            <col className="w-[26%]" />
-            <col className="w-[18%]" />
-            <col className="w-[22%]" />
-            <col className="w-[14%]" />
+            <col className="w-[25%]" />
+            <col className="w-[16%]" />
             <col className="w-[20%]" />
+            <col className="w-[13%]" />
+            <col className="w-[26%]" />
           </colgroup>
           <thead>
             <tr className="eyebrow text-[11px]">
@@ -78,7 +79,7 @@ export function RunBoard({
                 Parse time
               </th>
               <th scope="col" className="py-3 pl-5 pr-5 font-normal sm:pr-6">
-                Quality
+                Quality across pages
               </th>
             </tr>
           </thead>
@@ -180,12 +181,12 @@ export function RunBoard({
                   <td className="py-4 pl-5 pr-5 sm:pr-6">
                     <button
                       type="button"
-                      className="rounded-full text-left"
+                      className="rounded-lg text-left"
                       onClick={() => onSelectRun(run.id)}
                       aria-label={`View quality feedback for ${run.model_name}`}
                       aria-controls="selected-model-output"
                     >
-                      <JudgmentBadge run={run} />
+                      <JudgmentSummary run={run} />
                     </button>
                   </td>
                 </tr>

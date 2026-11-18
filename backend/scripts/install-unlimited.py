@@ -5,7 +5,7 @@
 """Install Unlimited-OCR 2's separate, pinned llama.cpp runtime.
 
 Windows: the author's patched DLLs over the official b11913 Vulkan release.
-Linux: build the same patch with CUDA (requires a C++ compiler and CUDA Toolkit).
+Linux: build the same patch with CUDA, or CPU-only with --cpu (no CUDA Toolkit).
 Does not replace the runtime used by the other models or the AMD PyTorch install.
 """
 
@@ -64,6 +64,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--download-model", action="store_true", help="Cache BF16 + F16 weights (~6.7 GB)"
+    )
+    parser.add_argument(
+        "--cpu",
+        action="store_true",
+        help="Build without CUDA on Linux. Existing GPU builds also support CPU inference.",
     )
     args = parser.parse_args()
     ROOT.mkdir(parents=True, exist_ok=True)
@@ -137,7 +142,8 @@ def main():
                     "Ninja",
                     f"-DCMAKE_MAKE_PROGRAM={Path(ninja.BIN_DIR) / 'ninja'}",
                     "-DCMAKE_BUILD_TYPE=Release",
-                    "-DGGML_CUDA=ON",
+                    f"-DGGML_CUDA={'OFF' if args.cpu else 'ON'}",
+                    "-DGGML_VULKAN=OFF",
                     "-DLLAMA_CURL=OFF",
                 ],
                 check=True,
@@ -147,7 +153,7 @@ def main():
                 check=True,
             )
             binary = build / "bin/llama-server"
-            backend = "CUDA"
+            backend = "CPU" if args.cpu else "CUDA"
         manifest.write_text(
             json.dumps(
                 {

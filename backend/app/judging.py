@@ -1,7 +1,6 @@
 """Durable background judging, independent of OCR scheduling and timing."""
 
 import asyncio
-import contextlib
 import logging
 
 from sqlalchemy import select
@@ -22,7 +21,10 @@ class JudgeService:
         self._queue: asyncio.Queue[str] = asyncio.Queue()
         self._scheduled: set[str] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._task: asyncio.Task | None = None
+        self._tasks: list[asyncio.Task] = []
+        # Shared by every run/document, including retries. Never exceed this
+        # number of page checks even when several runs are scheduled together.
+        self._slots = asyncio.Semaphore(settings.judge_concurrency)
 
     async def start(self):
         self._loop = asyncio.get_running_loop()
@@ -37,13 +39,16 @@ class JudgeService:
                 else:
                     judgment.status = "failed"
                     judgment.error = "Add MISTRAL to .env, then retry the quality check."
-        self._task = asyncio.create_task(self._work(), name="quality-judge")
+        self._tasks = [
+            asyncio.create_task(self._work(), name=f"quality-judge-{i}")
+            for i in range(self.settings.judge_concurrency)
+        ]
 
     async def stop(self):
-        if self._task:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
+        for task in self._tasks:
+            task.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
+        self._tasks.clear()
 
     def _enqueue(self, run_id: str):
         if run_id not in self._scheduled:
@@ -154,9 +159,11 @@ class JudgeService:
             if not baseline or baseline.get("error") or not baseline.get("markdown", "").strip():
                 raise JudgeError(f"LlamaParse has no usable reference for page {number}.")
 
-        for number in pages:
-            if any(p["page_number"] == number for p in results):
-                continue
+        async def evaluate_page(number):
+            async with self._slots:
+                await compare_page(number)
+
+        async def compare_page(number):
             baseline = reference_pages[number]
             candidate = candidate_pages.get(number)
             if not candidate or candidate.get("error") or not candidate.get("markdown", "").strip():
@@ -182,7 +189,18 @@ class JudgeService:
                 judgment = session.get(Judgment, run_id)
                 if judgment is None or judgment.input_hash != fingerprint:
                     return
-                judgment.page_results = list(results)
+                judgment.page_results = sorted(results, key=lambda p: pages.index(p["page_number"]))
+
+        # A failed page must not prevent the other pages from finishing. Persist
+        # each success immediately so retries/restarts only pay for missing pages.
+        completed = {p["page_number"] for p in results}
+        outcomes = await asyncio.gather(
+            *(evaluate_page(number) for number in pages if number not in completed),
+            return_exceptions=True,
+        )
+        for outcome in outcomes:
+            if isinstance(outcome, BaseException):
+                raise outcome
 
         with session_scope() as session:
             judgment = session.get(Judgment, run_id)

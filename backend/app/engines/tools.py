@@ -11,7 +11,7 @@ from typing import Any
 
 from PIL import Image
 
-from .backends.transformers_local import free_accelerator_memory
+from .backends.transformers_local import free_accelerator_memory, local_inference_missing
 from .base import PageOutput, PageSource, ParseOutput, RenderSpec, Report, element
 from .open_engine import OpenModelEngine, parse_page_by_page
 
@@ -224,18 +224,37 @@ class DoclingRuntime:
         for number in pages.numbers:
             # Images are a single page 1 whatever the arena calls it.
             page_no = number if pages.extension == ".pdf" else 1
-            markdown = document.export_to_markdown(page_no=page_no)
+            markdown = self._markdown(document, page_no)
             outputs.append(PageOutput(number, markdown, seconds, self._elements(document, page_no)))
         return ParseOutput(markdown="\n\n".join(p.markdown for p in outputs), pages=outputs)
 
     @staticmethod
+    def _markdown(document: Any, page_no: int) -> str:
+        from docling_core.types.doc import ContentLayer
+
+        # Compare extracted page content, including furniture and text inside
+        # pictures, without treating image classifier labels as printed words.
+        return document.export_to_markdown(
+            page_no=page_no,
+            included_content_layers={ContentLayer.BODY, ContentLayer.FURNITURE},
+            traverse_pictures=True,
+            include_picture_classification=False,
+        )
+
+    @staticmethod
     def _elements(document: Any, page_no: int) -> list[dict[str, Any]]:
+        from docling_core.types.doc import ContentLayer
+
         page = document.pages.get(page_no)
         if page is None or not page.size.width or not page.size.height:
             return []
         width, height = page.size.width, page.size.height
         layout = []
-        for item, _level in document.iterate_items(page_no=page_no):
+        for item, _level in document.iterate_items(
+            page_no=page_no,
+            included_content_layers={ContentLayer.BODY, ContentLayer.FURNITURE},
+            traverse_pictures=True,
+        ):
             prov = next((p for p in getattr(item, "prov", []) if p.page_no == page_no), None)
             if prov is None:
                 continue
@@ -260,7 +279,7 @@ class DoclingEngine(CpuEngine):
 
         if importlib.util.find_spec("docling") is None:
             return "Docling is not installed (uv sync --extra local --inexact)"
-        return None
+        return local_inference_missing()
 
     def build_local(self) -> DoclingRuntime:
         return DoclingRuntime()

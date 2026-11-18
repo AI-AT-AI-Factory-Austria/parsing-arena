@@ -43,6 +43,21 @@ def test_page_mapping_headings_tables_and_blank_pages():
     assert first.seconds is None  # Independent per-page timings would be fabricated.
 
 
+def test_titles_without_levels_keep_heading_semantics():
+    raw = (
+        "<PAGE><BLOCK>header[0,0,100,10]<FORK>Navigation\n"
+        "<BLOCK>title[0,20,100,40]<FORK>Our Code\n"
+        "<BLOCK>text[0,50,100,60]<FORK>Body text\n"
+        "<BLOCK>title[0,70,100,80]<FORK>## Already formatted\n"
+        "<BLOCK>footer[0,90,100,100]<FORK>Footer"
+    )
+    page = unlimited.parse_document(raw, [1])[0]
+    assert page.markdown == (
+        "Navigation\n\n# Our Code\n\nBody text\n\n## Already formatted\n\nFooter"
+    )
+    assert page.elements[1]["content"] == "Our Code"
+
+
 @pytest.mark.parametrize(
     "raw,numbers",
     [
@@ -81,7 +96,8 @@ def test_dedicated_runtime_and_hardware_dispatch(monkeypatch, tmp_path):
     assert engine.unavailable_reason() is None
     assert engine.build_local().device == "CUDA0" and engine.pool_key != key
     settings.local_device = "cpu"
-    assert "requires" in engine.unavailable_reason()
+    assert engine.unavailable_reason() is None
+    assert engine.build_local().device == "CPU"
     install_manifest(tmp_path, revision="wrong")
     assert unlimited.installed_runtime(settings) is None
 

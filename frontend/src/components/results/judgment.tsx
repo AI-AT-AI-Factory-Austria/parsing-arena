@@ -23,6 +23,7 @@ export function VerdictBadge({ verdict }: { verdict: Verdict }) {
 export function JudgmentBadge({ run }: { run: Run }) {
   if (run.kind === "reference") return <Chip tone="outline">Reference</Chip>;
   const judgment = run.judgment;
+  if (judgment?.outdated) return <Chip tone="neutral">Recheck needed</Chip>;
   if (judgment?.status === "completed" && judgment.verdict) {
     return <VerdictBadge verdict={judgment.verdict} />;
   }
@@ -38,6 +39,41 @@ export function JudgmentBadge({ run }: { run: Run }) {
     <Chip tone="neutral" title={judgment?.error ?? undefined}>
       {judgment?.status === "failed" ? "Check unavailable" : run.status === "failed" ? "No output" : "Not judged"}
     </Chip>
+  );
+}
+
+export function JudgmentSummary({ run }: { run: Run }) {
+  const judgment = run.judgment;
+  if (run.kind === "reference" || !judgment || judgment.outdated ||
+      judgment.pages_total <= 1 || judgment.pages.length === 0) {
+    return <JudgmentBadge run={run} />;
+  }
+  const counts = { excellent: 0, pass: 0, fail: 0 };
+  for (const page of judgment.pages) counts[page.verdict] += 1;
+  const judged = judgment.pages.length;
+  const remaining = Math.max(0, judgment.pages_total - judged);
+  const passRate = Math.round(100 * (counts.excellent + counts.pass) / judged);
+
+  return (
+    <span className="block space-y-1.5">
+      <span className="flex flex-wrap gap-1.5">
+        {(["excellent", "pass", "fail"] as const).map((verdict) => counts[verdict] > 0 && (
+          <Chip key={verdict} tone={VERDICTS[verdict].tone}>
+            {counts[verdict]} {VERDICTS[verdict].label}
+          </Chip>
+        ))}
+      </span>
+      <span className="block text-xs text-muted" title="Excellent and Pass count as passed. Unchecked pages are excluded from the pass rate.">
+        <span className="font-medium text-ink">{passRate}% pass rate</span>
+        {" · "}{judged}/{judgment.pages_total} judged
+      </span>
+      {remaining > 0 && (
+        <span className={`flex items-center gap-1.5 text-xs ${judgment.status === "failed" ? "text-danger" : "text-muted"}`}>
+          {isJudging(run) && <Spinner className="size-3" />}
+          {remaining} {remaining === 1 ? "check" : "checks"} {judgment.status === "failed" ? "unavailable" : "pending"}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -66,9 +102,11 @@ export function JudgmentFeedback({
     return <p className="border-b border-line bg-mint-wash px-4 py-3 text-xs text-leaf-strong">LlamaParse reference · Used as the baseline for quality checks.</p>;
   }
   const judgment = run.judgment;
+  const multiplePages = !!judgment && judgment.pages_total > 1;
+  const passedPages = judgment?.pages.filter((p) => p.verdict !== "fail").length ?? 0;
   const selectedPage = page === "all" ? null : judgment?.pages.find((p) => p.page_number === page);
-  const verdict = page === "all" ? judgment?.verdict : selectedPage?.verdict;
-  const pages = page === "all" ? judgment?.pages ?? [] : selectedPage ? [selectedPage] : [];
+  const verdict = judgment?.outdated ? null : page === "all" ? judgment?.verdict : selectedPage?.verdict;
+  const pages = judgment?.outdated ? [] : page === "all" ? judgment?.pages ?? [] : selectedPage ? [selectedPage] : [];
   const findings = pages.flatMap((p) => p.issues.map((issue) => ({ ...issue, page: p.page_number })));
   const modelName = judgment?.model.startsWith("mistral-large-4") ? "Mistral Large 4" : judgment?.model;
 
@@ -79,8 +117,28 @@ export function JudgmentFeedback({
           <Scale aria-hidden className="size-4 text-muted" />
           Quality {page === "all" ? "· All pages" : `· Page ${page}`}
         </div>
-        {verdict ? <VerdictBadge verdict={verdict} /> : <JudgmentBadge run={run} />}
+        {!(page === "all" && multiplePages) && (
+          verdict ? <VerdictBadge verdict={verdict} /> : <JudgmentBadge run={run} />
+        )}
       </div>
+      {page === "all" && multiplePages && (
+        <div className="mt-2"><JudgmentSummary run={run} /></div>
+      )}
+      {page === "all" && multiplePages && !judgment?.outdated && !!judgment?.pages.length && (
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Quality by page">
+          {[...judgment.pages].sort((a, b) => a.page_number - b.page_number).map((p) => (
+            <button
+              key={p.page_number}
+              type="button"
+              onClick={() => onSelectPage(p.page_number)}
+              aria-label={`View page ${p.page_number} quality: ${VERDICTS[p.verdict].label}`}
+              className="rounded-full transition hover:brightness-95"
+            >
+              <Chip tone={VERDICTS[p.verdict].tone}>Page {p.page_number} · {VERDICTS[p.verdict].label}</Chip>
+            </button>
+          ))}
+        </div>
+      )}
       {isJudging(run) && (
         <p role="status" className="mt-2 text-xs text-muted">
           {judgment?.status === "queued" ? "Waiting for the judge…" : `Comparing with LlamaParse · ${judgment?.pages_done} of ${judgment?.pages_total} pages checked.`}
@@ -88,6 +146,11 @@ export function JudgmentFeedback({
       )}
       {judgment?.status === "failed" && <p className="mt-2 text-xs text-muted">{judgment.error}</p>}
       {!judgment && <p className="mt-2 text-xs text-muted">{notice}</p>}
+      {judgment?.outdated && (
+        <p className="mt-2 text-xs text-muted">
+          Judging rules have changed. Recheck the saved text to update this score; OCR will not run again.
+        </p>
+      )}
       {verdict === "excellent" && <p className="mt-2 text-xs text-muted">No discrepancies found against the reference.</p>}
       {findings.length > 0 && (
         <ul className="mt-2 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-body">
@@ -119,17 +182,17 @@ export function JudgmentFeedback({
           </ul>
         </details>
       )}
-      {judgment?.status === "completed" && (
+      {judgment?.status === "completed" && !judgment.outdated && (
         <p className="mt-2 text-[11px] text-faint">
           {modelName} · Compared with LlamaParse
-          {page !== "all" && judgment.pages_total > 1 && judgment.verdict && (
-            <> · Overall: {VERDICTS[judgment.verdict].label} (worst page)</>
+          {page !== "all" && multiplePages && (
+            <> · Document: {passedPages}/{judgment.pages_total} pages passed</>
           )}
         </p>
       )}
-      {onJudge && (!judgment || judgment.status === "failed") && (
+      {onJudge && (!judgment || judgment.status === "failed" || judgment.outdated) && (
         <button type="button" disabled={busy} onClick={onJudge} className="mt-2 rounded text-xs font-medium text-brand hover:underline disabled:opacity-50">
-          {busy ? "Queuing…" : judgment ? "Retry quality check" : "Judge outputs"}
+          {busy ? "Queuing…" : judgment?.outdated ? "Recheck saved outputs" : judgment ? "Retry quality check" : "Judge outputs"}
         </button>
       )}
     </aside>

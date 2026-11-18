@@ -1,13 +1,31 @@
-# OCR Arena
+# Parsing Arena
 
 Evaluate the open-source OCR models that best suit your documents.
 
-Drop in a PDF or image. OCR Arena parses it with open OCR models of different sizes, times
+Drop in PDFs or images and select up to 12 unique pages across them. Parsing Arena parses
+the batch with open OCR models of different sizes, times
 every run, and shows each model's output next to the original page and next to
 **LlamaParse Agentic Plus** as an optional reference. The selection lists 24 implemented
 methods, grouped roughly from larger models to compact pipelines and lightweight tools.
 Each method highlights its strengths and use cases based on its model card and the preset implemented here.
 Parameter counts and licenses come from the official model cards and project documentation.
+
+The upload area shows each document's pages as selectable thumbnails, with a larger
+preview on click. Add documents incrementally or choose several files at once. Repeated
+uploads of identical files are detected, and the server deduplicates selections by file
+content and page number. The 12-page limit applies to the whole batch.
+
+Results open on **Batch overview**, with a page-weighted average parsing time, total time,
+extraction coverage, and Excellent/Pass/Fail counts for each model. Pass rate includes
+Excellent and Pass among pages with a current judgment; missing checks are excluded and
+coverage is shown. Choose a document tab to inspect its pages and model outputs.
+Documents stay separate for multi-page parsing, table reconstruction and judging.
+Saved batches appear once in history and can be reopened, rerun or deleted together.
+Single-document saved results and sample comparisons remain available.
+
+Optional judging asks for confirmation covering every included document. LlamaParse
+receives those documents in full to process their selected pages; Mistral receives
+the extracted texts. The CPU checkbox applies to every extraction in the batch.
 
 | Model | Approximate size | Strengths & use cases | License |
 | --- | --- | --- | --- |
@@ -103,6 +121,10 @@ progress. Incomplete or truncated generations are reported as page failures. The
 downloads the [IBM model](https://huggingface.co/ibm-granite/granite-docling-258M); the existing
 model cache limit also applies to this pipeline.
 
+Both Docling presets export recognized headers, footers and text inside picture regions.
+Image classification metadata (such as "Logo" or "Other") is excluded from the page text;
+actual recognized text and captions are retained.
+
 **PaddleOCR Tiny / Small / Medium** use the
 [PP-OCRv6 family](https://huggingface.co/blog/PaddlePaddle/pp-ocrv6), with stable IDs
 `paddleocr_tiny`, `paddleocr_small` and `paddleocr_medium`. The published sizes include
@@ -194,6 +216,9 @@ F16 vision encoder** (about 6.7 GB of weights). This retains the 3.3B parameter 
 it is not a 4/8-bit quantization. The original checkpoint is pinned to
 `0480966938291445591f69f08a13b041c073a96a`.
 
+Detected title blocks retain their supplied heading level in Markdown, defaulting to H1
+when the model provides no level, as in the upstream Unlimited-OCR converter.
+
 Install the dedicated runtime and optionally cache its weights:
 
 ```powershell
@@ -209,7 +234,7 @@ the other models' llama.cpp installation. Restart the backend after installation
 This implementation preserves **DASH routing and page-relative RoPE**, but computes
 masked dense attention. **It does not provide the paper's optimized sparse-memory
 scaling**: longer documents still consume more memory. It is intended to evaluate
-the model's multi-page extraction on the available GPU, not to benchmark unlimited
+the model's multi-page extraction on the available hardware, not to benchmark unlimited
 document length. The catalog's ParseBench score is the published model score, not a
 new measurement of this runtime.
 
@@ -244,8 +269,8 @@ Set **`RUNTIME_PROFILE=auto`** in the repo `.env` (the default), or choose expli
 
 An explicit profile is checked against the actual OS and GPU runtime; it cannot enable
 CUDA on an AMD machine. Restart the backend after changing `.env`. Configured model
-endpoints take precedence and remain usable from either platform. `LOCAL_DEVICE=cpu`
-explicitly selects CPU inference instead of the Vulkan alternatives.
+endpoints take precedence and remain usable from either platform, except in CPU-only mode.
+`LOCAL_DEVICE=cpu` forces CPU-only mode for the entire server.
 
 The Windows profile uses the pinned Vulkan llama.cpp build installed by
 `backend/.venv/Scripts/python.exe backend/scripts/install-preset-tools.py`.
@@ -267,6 +292,61 @@ Documents stay local. Logs are in `data/runtime-logs/*-vulkan.log`.
 The three Vulkan pipelines completed an end-to-end test on a Radeon 8060S / Windows
 using page 1 of the bundled synthetic report. **Nemotron SkyVision CPU** runs locally
 on the CPU and is described below.
+
+### CPU-only runs
+
+Check **Use CPU only** at the top of **Run settings** before starting a new run.
+The app checks availability for that mode, ignores configured remote model endpoints,
+and runs extraction locally without GPU offloading. Uncheck it to return to the normal
+hardware settings. The mode is saved with the experiment, shown on the results page,
+and preserved by **Run again**. Opening a saved sample still opens its original cached results.
+
+CPU runs use one model at a time and release it afterwards. Native vision-language models
+use BF16 on CPUs with native BF16 instructions and oneDNN support, otherwise float32.
+Set `CPU_DTYPE=float32` to force float32. DocTR, PaddleOCR and Docling retain their own
+pipeline precision settings. LightOnOCR, OvisOCR3 and Infinity use their existing full-precision GGUF
+weights on CPU when llama.cpp is installed, with native Transformers as a fallback.
+Marker Balanced and Unlimited-OCR 2 also disable decoder, vision, KV-cache and auxiliary
+GPU offloading. Their normal rendering, prompts and output limits are retained.
+On Windows with a ROCm PyTorch build, native PyTorch BF16 vision-language models use
+Transformers' eager attention to avoid a slow CPU SDPA kernel; this needs more RAM
+than fused attention. GPU runs keep their original attention implementation.
+
+Larger models can take minutes per page and need several GB of free RAM; start with one
+page and a few methods. `CPU_THREADS=8` controls llama.cpp and the runner's default PyTorch
+thread count; individual libraries may apply their own thread limits. This switch does
+not install missing packages or weights, and `LOCAL_INFERENCE=false` still disables
+dependent local models. Initial model downloads still require internet access.
+
+Infinity-Parser2-Flash, Aeddix Alpine OCR, GLM-OCR, florin-parser-nano and docTR Large
+transformer are disabled in CPU mode due to long processing times. Their availability
+in GPU mode is unchanged.
+
+Optional **LlamaParse/Mistral judging remains an external API operation**, controlled by
+its separate checkbox and confirmation. It is not made local by the CPU setting.
+
+The same mode is available through `POST /api/experiments` with `"cpu_only": true`,
+`GET /api/models?cpu_only=true`, or the CLI:
+
+```powershell
+backend/.venv/Scripts/python.exe backend/scripts/smoke_model.py backend/samples/sample-report.pdf --model docling --pages 1 --cpu-only
+```
+
+On a Linux machine without CUDA, install the dedicated Unlimited runtime with
+`uv run --no-project --script backend/scripts/install-unlimited.py --cpu --download-model`.
+This builds the pinned patched source with CUDA disabled; a C++ toolchain is still required.
+The Linux build path has not been tested on this Windows machine.
+
+Validated on 17 November 2026 on a Ryzen AI MAX+ 395: all **24 local methods**
+completed CPU-only extraction of a simple synthetic PDF, including two pages together
+for Unlimited-OCR 2. Each output contained the test invoice number. The UI was also
+checked with the AMD GPU available, verifying CPU execution and saved run metadata.
+These are functional smoke tests, not document-accuracy or performance benchmarks.
+
+Infinity-Parser2-Flash, Aeddix Alpine OCR and GLM OCR are currently disabled in CPU
+mode after taking 13:30, 8:55 and 7:18 respectively on a subsequent single-page run.
+They remain available in GPU mode. The CPU selection shows the reason; new CPU runs
+and reruns cannot include these models. Previously saved results remain viewable.
 
 ### Nemotron SkyVision CPU
 
@@ -350,6 +430,14 @@ key the arena still works, but only with the open models.
 
 ### 2. Backend
 
+On Windows with **Smart App Control**, use an official, signed Python installation
+from Python.org. Unsigned uv-managed Python builds can be blocked by Windows
+([upstream issue](https://github.com/astral-sh/uv/issues/22869)). Create a fresh virtual
+environment from the signed interpreter, for example `py -3.13 -m venv backend/.venv`,
+before installing dependencies. Back up an existing environment before rebuilding it;
+changing Python minor versions requires reinstalling its packages. The AMD 7.13.0
+wheels support Python 3.13 on Windows.
+
 Install the dependencies and a PyTorch build that matches your hardware:
 
 ```powershell
@@ -366,8 +454,15 @@ Then start the API:
 
 ```bash
 cd backend
-uv run uvicorn app.main:app --port 8000
+uv run --no-sync python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
+
+`--no-sync` preserves the separately installed hardware-specific PyTorch build.
+Windows may also block native dependencies such as ROCm or PDFium even when Python
+itself is signed. The API can still serve saved outputs, originals and cached previews:
+an unloadable PyTorch runtime marks dependent models unavailable, and unavailable PDF
+rendering returns HTTP 503 when a fresh render is required. The server logs identify
+the dependency failure; the application does not change Windows security settings.
 
 The first run of each model downloads its weights from Hugging Face (1.7–4.5 GB per model,
 about 18 GB for all seven). At most `MAX_LOADED_MODELS` (default 2) stay in memory; the least
@@ -457,6 +552,9 @@ The frontend uses only this JSON API, so other clients can use it too:
 | `GET /api/models` | Catalog with sizes, specialties and per-model availability (legacy benchmark metadata retained) |
 | `POST /api/documents` | Upload (`multipart/form-data`, field `file`) |
 | `POST /api/documents/sample` | Add the bundled sample report |
+| `POST /api/batches` | Start a batch: `{"documents": [{"document_id": "...", "pages": [1, 3]}], "models": ["pypdf"], "cpu_only": false}`; up to 12 unique pages |
+| `GET /api/batches`, `/api/batches/{id}` | Saved batches; detail includes per-document experiments and page-weighted model aggregates |
+| `POST /api/batches/{id}/rerun`, `DELETE /api/batches/{id}` | Rerun the same selection/mode, or delete a finished batch |
 | `GET /api/documents/{id}/file`, `/thumbnail`, `/pages/{n}` | Original, thumbnail, page render |
 | `POST /api/experiments` | Start: `{"document_id", "models": [...], "pages": "1-3,5"}` |
 | `GET /api/experiments`, `GET /api/experiments/{id}` | History; detail with progress and outputs |
@@ -559,21 +657,37 @@ uv run python scripts/smoke_model.py samples/sample-report.pdf --model lightonoc
 ## Privacy
 
 Open models keep documents on the machine that runs the backend. When LlamaParse is selected,
-the selected pages are uploaded to LlamaIndex Cloud.
+the full document is uploaded to LlamaIndex Cloud; page selection controls which pages are
+processed, not which parts of the file are uploaded.
 
 When `MISTRAL` (or `MISTRAL_API_KEY`) is configured and a completed LlamaParse reference is
 available, the candidate and reference **extracted text** are sent to Mistral for quality
 judging. Original files and page images are not sent to the judge.
 
+Starting or rerunning an experiment with LlamaParse selected opens a confirmation dialog
+explaining both transfers and the user's responsibility to check the document's sensitivity
+and permission to share it. The user must type `OK` before the run is submitted. Cancelling
+starts no run, and confirmation is requested again for each new attempt.
+
 ## Quality judging
 
 The default judge is [Mistral Large 4](https://docs.mistral.ai/models/mistral-large), using
-high reasoning effort and structured JSON responses. `JUDGE_MODEL` can override the model;
-`JUDGE_TIMEOUT_S` defaults to 180 seconds per request. The API key stays on the backend.
+medium reasoning effort and structured JSON responses. `JUDGE_MODEL` can override the model;
+`JUDGE_REASONING_EFFORT` supports `low`, `medium` and `high`. `JUDGE_TIMEOUT_S` defaults to
+180 seconds per request. The API key stays on the backend.
+
+Up to four page checks run concurrently across documents and models (`JUDGE_CONCURRENCY=4`).
+Temporary connection errors, HTTP 408/429/5xx responses and unreadable responses are retried
+with exponential backoff and jitter, respecting `Retry-After`. `JUDGE_REQUEST_ATTEMPTS=4`
+limits each request to four attempts. Invalid assessments are repaired up to twice;
+truncated assessments get a larger output allowance. Authentication and input errors
+are not retried. A failed page does not stop other pages from being judged.
 
 Each selected page is compared to the matching LlamaParse page for content, exact values,
 tables, structure, reading order and formulas. Equivalent Markdown/HTML and cosmetic
-differences are ignored. Findings include short source quotes that the backend validates.
+differences are ignored. Findings include short source excerpts, which may combine
+separate passages. The backend validates the response format, without matching excerpts
+against the input text.
 The document verdict is the worst page's verdict:
 
 - **Excellent:** no supported discrepancies against the reference.
@@ -582,6 +696,11 @@ The document verdict is the worst page's verdict:
   major extraction error.
 
 The score is relative to LlamaParse, not a guarantee of correctness against the original.
+LlamaParse v2 can return page headers and footers separately from the body. The adapter
+includes these regions in the displayed and judged Markdown, avoids duplicating matching
+body edges, and retains the separate fields in run metadata. The judge must not treat
+candidate-only headers, footers or navigation as invented merely because the reference
+omits them; actual contradictions, repetition and extraction errors still count.
 An empty, failed or unusable reference produces an unavailable check, never a Fail score.
 API errors likewise remain distinct from extraction quality. Oversized pages are rejected
 without silently truncating the comparison.
@@ -589,9 +708,15 @@ without silently truncating the comparison.
 New runs are checked automatically after both outputs complete. Existing experiments have
 a **Judge outputs** action, backed by `POST /api/experiments/{id}/judge`. The action retries
 failed checks and skips already judged, unchanged outputs. Judging has its own background
-worker and does not affect OCR timings. Results persist in a separate SQLite table with
+queue and does not affect OCR timings. Results persist in a separate SQLite table with
 the model, rubric version, input fingerprint and page findings; interrupted checks resume
 from completed pages on restart. Only explicitly queued checks resume, not all old experiments.
+New page assessments record their reasoning effort. Changing this setting keeps completed
+ratings; missing pages use the current effort when retried. The rubric remains the same.
+Existing references and ratings are not rewritten when the adapter or rubric changes.
+Ratings from an older rubric are shown as **Recheck needed** until explicitly rejudged.
+Using **Judge outputs** again applies the current rubric to saved text without rerunning OCR;
+recovering header/footer text absent from an old saved reference requires refreshing that reference.
 
 ## Roadmap
 

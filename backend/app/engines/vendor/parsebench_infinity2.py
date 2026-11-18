@@ -1,6 +1,6 @@
 """Infinity-Parser2 output normalization.
 
-[ocr-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
+[parsing-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
 ``src/parse_bench/inference/providers/parse/infinity_parser2.py``. The helpers are unchanged;
 ``reassemble_text`` is the provider's ``_reassemble_text`` and ``normalize_page`` restates the
 per-page part of ``_normalize`` (header items first, footer items last) without ParseBench's

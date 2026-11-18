@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 # Isolate every test run from the developer's data, models and API key.
-_DATA_DIR = Path(tempfile.mkdtemp(prefix="ocr-arena-tests-"))
+_DATA_DIR = Path(tempfile.mkdtemp(prefix="parsing-arena-tests-"))
 os.environ["DATA_DIR"] = str(_DATA_DIR)
 os.environ["LOCAL_INFERENCE"] = "false"
 os.environ["LLAMA_CLOUD_API_KEY"] = ""

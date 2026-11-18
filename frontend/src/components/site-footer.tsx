@@ -7,7 +7,7 @@ export function SiteFooter() {
         <div className="flex items-center gap-3">
           <LogoMark className="size-7" />
           <p className="text-muted">
-            OCR Arena by{" "}
+            Parsing Arena by{" "}
             <a
               href="https://ai-at.eu/"
               className="underline decoration-ash underline-offset-2 hover:text-ink"

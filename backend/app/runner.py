@@ -137,6 +137,21 @@ class Runner:
             session.expunge(document)
             pages = list(experiment.pages)
             runs = [(r.id, r.model_id) for r in experiment.runs]
+            cpu_only = experiment.cpu_only
+
+        registry = self.registry.for_mode(cpu_only)
+        if cpu_only:
+            # A cached GPU model/server from an earlier run must not be reused.
+            await self.registry.pool.close()
+            if self.settings.local_inference:
+                try:
+                    import torch
+                except (ImportError, OSError):
+                    # Tools such as pypdf/Tesseract do not depend on PyTorch.
+                    # Individual model availability handles missing libraries.
+                    pass
+                else:
+                    torch.set_num_threads(self.settings.cpu_threads)
 
         reference = [run_id for run_id, model_id in runs if model_id == LLAMAPARSE_ID]
         open_runs = [(run_id, model_id) for run_id, model_id in runs if model_id != LLAMAPARSE_ID]
@@ -146,7 +161,9 @@ class Runner:
             reference_task = asyncio.create_task(self._run_reference(reference[0], document, pages))
         try:
             for run_id, model_id in open_runs:
-                await self._run_open_model(experiment_id, run_id, model_id, document, pages)
+                await self._run_open_model(
+                    experiment_id, run_id, model_id, document, pages, registry
+                )
         finally:
             if reference_task is not None:
                 await reference_task
@@ -214,8 +231,9 @@ class Runner:
         model_id: str,
         document: Document,
         pages: list[int],
+        registry: EngineRegistry | None = None,
     ) -> None:
-        engine = self.registry.open_engine(model_id)
+        engine = (registry or self.registry).open_engine(model_id)
         if engine is None:
             _update_run(
                 run_id,
@@ -233,7 +251,10 @@ class Runner:
                 run_id,
                 status="running",
                 load_seconds=round(load_seconds, 3),
-                meta=engine.describe(backend),
+                meta={
+                    **engine.describe(backend),
+                    "cpu_only": engine.settings.local_device == "cpu",
+                },
                 progress={"phase": "layout"},
             )
             started = time.perf_counter()

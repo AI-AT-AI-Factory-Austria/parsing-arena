@@ -1,4 +1,4 @@
-# OCR Arena frontend
+# Parsing Arena frontend
 
 Next.js 16 app (App Router, Cache Components, Tailwind CSS 4). It talks to the FastAPI backend
 through the `/api/*` rewrite in `next.config.ts`; set `BACKEND_URL` if the backend is not at

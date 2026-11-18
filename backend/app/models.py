@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -33,20 +33,37 @@ class Document(Base):
     )
 
 
+class Batch(Base):
+    """A saved comparison of selected pages from several separate documents."""
+
+    __tablename__ = "batches"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    experiments: Mapped[list["Experiment"]] = relationship(
+        back_populates="batch", cascade="all, delete-orphan", order_by="Experiment.created_at"
+    )
+
+
 class Experiment(Base):
     __tablename__ = "experiments"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    batch_id: Mapped[str | None] = mapped_column(
+        ForeignKey("batches.id", ondelete="CASCADE"), index=True
+    )
     # queued | running | completed | failed
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     pages: Mapped[list[int]] = mapped_column(JSON)  # selected 1-based page numbers
+    cpu_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
 
     document: Mapped[Document] = relationship(back_populates="experiments")
+    batch: Mapped[Batch | None] = relationship(back_populates="experiments")
     runs: Mapped[list["ModelRun"]] = relationship(
         back_populates="experiment",
         cascade="all, delete-orphan",

@@ -9,7 +9,7 @@ import llama_cloud
 import pytest
 
 from app.config import Settings
-from app.engines.llamaparse import LlamaParseEngine, LlamaParseError
+from app.engines.llamaparse import LlamaParseEngine, LlamaParseError, page_markdown
 from tests.conftest import SAMPLE_PDF
 
 JOB = {"id": "job-1", "project_id": "proj-1"}
@@ -120,6 +120,61 @@ def test_renumbered_subset_maps_back(monkeypatch):
     api = FakeApi(pages=[{"page_number": 1, "success": True, "markdown": "only"}])
     output, _ = run_engine(monkeypatch, api, page_numbers=[2])
     assert [(p.page_number, p.markdown) for p in output.pages] == [(2, "only")]
+
+
+def test_separate_header_and_footer_are_kept_for_display_and_judging(monkeypatch):
+    api = FakeApi(
+        pages=[
+            {
+                "page_number": 1,
+                "success": True,
+                "header": "GLOBAL REPORT 2024 | ABOUT | DATA",
+                "markdown": "## Enterprise cybersecurity\n\nReport content.",
+                "footer": "22",
+            }
+        ]
+    )
+    output, _ = run_engine(monkeypatch, api, page_numbers=[2])
+    full_page = (
+        "GLOBAL REPORT 2024 | ABOUT | DATA\n\n## Enterprise cybersecurity\n\nReport content.\n\n22"
+    )
+    assert output.pages[0].page_number == 2
+    assert output.pages[0].markdown == full_page
+    assert output.markdown == full_page
+    assert output.meta["page_assembly"] == "header_body_footer_v1"
+    assert output.meta["page_regions"] == [
+        {
+            "page_number": 2,
+            "header": "GLOBAL REPORT 2024 | ABOUT | DATA",
+            "footer": "22",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "body,header,footer,expected",
+    [
+        ("  Body text.\n", None, None, "Body text."),
+        ("Body", " ", "\n", "Body"),
+        ("", "Report title", "Page 1", "Report title\n\nPage 1"),
+        ("# Report\n\nBody\n\nPage 1", "# Report", "Page 1", "# Report\n\nBody\n\nPage 1"),
+        (
+            "Report   title\n\nBody\n\nPage\n1",
+            "Report title",
+            "Page 1",
+            "Report   title\n\nBody\n\nPage\n1",
+        ),
+        (
+            "Body mentions Report title inside.",
+            "Report title",
+            None,
+            "Report title\n\nBody mentions Report title inside.",
+        ),
+        ("20240 is a number", "2024", None, "2024\n\n20240 is a number"),
+    ],
+)
+def test_page_regions_preserve_text_without_duplicate_edges(body, header, footer, expected):
+    assert page_markdown(body, header, footer) == expected
 
 
 def test_failed_page_is_reported(monkeypatch):

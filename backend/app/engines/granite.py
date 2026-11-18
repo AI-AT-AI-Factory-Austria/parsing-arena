@@ -112,7 +112,7 @@ class GraniteDoclingRuntime(DoclingRuntime):
             raise PageFailed(errors or f"Docling conversion ended with status {result.status}.")
         page_no = number if pages.extension == ".pdf" else 1
         document = result.document
-        return document.export_to_markdown(page_no=page_no), self._elements(document, page_no)
+        return self._markdown(document, page_no), self._elements(document, page_no)
 
 
 class GraniteDoclingEngine(OpenModelEngine):

@@ -27,6 +27,7 @@ async def main() -> None:
     parser.add_argument("--model", required=True, choices=sorted(ENGINES))
     parser.add_argument("--pages", default="1", help='page selection, e.g. "1" or "1-3"')
     parser.add_argument("--out", help="write the markdown to this file")
+    parser.add_argument("--cpu-only", action="store_true", help="Use the same CPU mode as the UI")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -44,9 +45,17 @@ async def main() -> None:
         page_count = 1
     numbers = parse_page_selection(args.pages, page_count)
 
-    engine = EngineRegistry(get_settings()).open_engine(args.model)
+    registry = EngineRegistry(get_settings()).for_mode(args.cpu_only)
+    if args.cpu_only:
+        try:
+            import torch
+        except (ImportError, OSError):
+            pass  # Text-only tools do not require PyTorch.
+        else:
+            torch.set_num_threads(registry.settings.cpu_threads)
+    engine = registry.open_engine(args.model)
     assert engine is not None
-    workdir = Path(tempfile.mkdtemp(prefix="ocr-arena-smoke-"))
+    workdir = Path(tempfile.mkdtemp(prefix="parsing-arena-smoke-"))
     paths = {}
     spec = engine.render
     for n in numbers if spec else []:
@@ -59,16 +68,20 @@ async def main() -> None:
         if "phase" in update or "pages_done" in update:
             print("  ", update, flush=True)
 
-    backend, load_seconds = await engine.prepare()
-    print(f"loaded in {load_seconds:.1f}s: {engine.describe(backend)}", flush=True)
-    started = time.perf_counter()
-    output = await engine.parse(
-        backend,
-        PageSource(numbers, paths, source=source, extension=extension),
-        report=report,
-        artifact_dir=workdir / "artifacts",
-    )
-    print(f"parsed {len(numbers)} page(s) in {time.perf_counter() - started:.1f}s")
+    try:
+        backend, load_seconds = await engine.prepare()
+        print(f"loaded in {load_seconds:.1f}s: {engine.describe(backend)}", flush=True)
+        started = time.perf_counter()
+        output = await engine.parse(
+            backend,
+            PageSource(numbers, paths, source=source, extension=extension),
+            report=report,
+            artifact_dir=workdir / "artifacts",
+        )
+        elapsed = time.perf_counter() - started
+    finally:
+        await registry.close()
+    print(f"parsed {len(numbers)} page(s) in {elapsed:.1f}s")
     for page in output.pages:
         status = page.error or f"{len(page.elements or [])} layout elements"
         print(f"  page {page.page_number}: {page.seconds or 0:.1f}s, {status}")

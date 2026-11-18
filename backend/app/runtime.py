@@ -16,10 +16,14 @@ def detected_profile() -> str:
 
 
 def runtime_profile(settings: Settings) -> str:
+    if settings.local_device == "cpu":
+        return "cpu"
     return detected_profile() if settings.runtime_profile == "auto" else settings.runtime_profile
 
 
 def profile_error(settings: Settings) -> str | None:
+    if settings.local_device == "cpu":
+        return None
     if settings.runtime_profile != "auto" and settings.runtime_profile != detected_profile():
         return (
             f"RUNTIME_PROFILE={settings.runtime_profile} does not match this machine "

@@ -118,7 +118,7 @@ class InfinityParser2Engine(Qwen35Engine):
     )
 
     def build_local(self):
-        if self.uses_vulkan:
+        if self.uses_llama_cpp:
             return self.vulkan_backend(MAX_MODEL_LEN)
         assert self.model.hf_repo
         return LocalVisionModel(

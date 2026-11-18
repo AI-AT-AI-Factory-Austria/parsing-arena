@@ -105,6 +105,9 @@ def test_missing_vulkan_binary_stays_disabled(monkeypatch):
 def test_falcon_requires_linux_cuda_triton_and_compiler(monkeypatch):
     monkeypatch.setattr(runtime, "detected_profile", lambda: "native")
     monkeypatch.setattr(open_engine, "local_inference_missing", lambda: None)
+    monkeypatch.setattr(
+        open_engine, "describe_local_device", lambda *_: {"available": True, "runtime": "CUDA"}
+    )
     monkeypatch.setattr(falcon, "describe_local_device", lambda *_: {"runtime": "CUDA"})
     monkeypatch.setattr(falcon, "triton_available", lambda: True)
     monkeypatch.setattr(falcon.shutil, "which", lambda *_: "/usr/bin/gcc")

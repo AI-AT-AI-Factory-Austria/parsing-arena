@@ -2,9 +2,9 @@
 # src/parse_bench/inference/providers/parse/kdl_frontier_nano.py.
 # See LICENSE in this directory. Pipeline design: KoreaDeep (KDL).
 #
-# OCR Arena changes, each marked "[ocr-arena]":
+# Parsing Arena changes, each marked "[parsing-arena]":
 #   - ParseBench provider/registry/schema imports and the Provider class removed
-#     (OCR Arena renders pages itself and has its own result types).
+#     (Parsing Arena renders pages itself and has its own result types).
 #   - The chat call goes through a pluggable backend (vLLM endpoint or local
 #     transformers) instead of a hard-wired httpx client.
 #   - The native layout category map is a parameter instead of a module global
@@ -643,7 +643,7 @@ def parse_native_raw_layout_tokens(content: str) -> list[NativeLayoutItem]:
     return items
 
 
-# [ocr-arena] category_map parameter threaded through to _category_for_item.
+# [parsing-arena] category_map parameter threaded through to _category_for_item.
 def parse_native_layout_tokens(
     content: str, category_map: dict[str, str] | None = None
 ) -> list[dict[str, Any]]:
@@ -2712,7 +2712,7 @@ def _nano_payload(stage: str, model: str, image: Image.Image) -> dict:
 
 
 class ChatBackend(Protocol):
-    """[ocr-arena] Executes one OpenAI-style chat/completions payload.
+    """[parsing-arena] Executes one OpenAI-style chat/completions payload.
 
     Returns the message content, or None on failure (the orchestrator keeps
     failed elements with content=''). Retries are the backend's concern.
@@ -3011,7 +3011,7 @@ MarkdownBuilder = Callable[
 class _NanoEngine:
     """Per-document pipeline against one chat backend.
 
-    [ocr-arena] Takes a ChatBackend instead of an endpoint URL, plus an
+    [parsing-arena] Takes a ChatBackend instead of an endpoint URL, plus an
     optional layout category map and markdown builder (the florin-parser-nano
     emission), a progress callback, and a directory for picture crops.
     """
@@ -3189,7 +3189,7 @@ class _NanoEngine:
                 cropped = el.pop("cropped_image", None)
                 if bucket_name == "picture":
                     # The original pipeline saves each crop and references it
-                    # from the markdown (>=25px gate). [ocr-arena] The crop is
+                    # from the markdown (>=25px gate). [parsing-arena] The crop is
                     # written when an artifact directory is configured so the
                     # UI can show it.
                     if cropped is not None and cropped.width >= 25 and cropped.height >= 25:

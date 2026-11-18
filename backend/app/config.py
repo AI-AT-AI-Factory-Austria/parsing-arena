@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     )
     judge_model: str = "mistral-large-4"
     judge_timeout_s: float = 180.0
+    judge_reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    judge_concurrency: int = Field(default=4, ge=1, le=16)
+    judge_request_attempts: int = Field(default=4, ge=1, le=8)
 
     # Storage
     data_dir: Path = REPO_DIR / "data"
@@ -87,6 +90,8 @@ class Settings(BaseSettings):
     local_inference: bool = True
     local_device: str = "auto"  # auto | cuda | cpu
     local_dtype: str = "auto"  # auto | bfloat16 | float16 | float32
+    cpu_threads: int = Field(default=8, ge=1, le=256)
+    cpu_dtype: Literal["auto", "float32", "bfloat16"] = "auto"
     local_max_batch: int = 8
     local_max_model_len: int = 8192
     keep_models_loaded: bool = True
@@ -112,6 +117,22 @@ class Settings(BaseSettings):
     @property
     def judge_configured(self) -> bool:
         return bool(self.mistral_api_key.get_secret_value().strip())
+
+    def for_cpu(self) -> "Settings":
+        """Isolated per-run settings; never mutate the server's GPU configuration."""
+        return self.model_copy(
+            update={
+                **{name: "" for name in type(self).model_fields if name.endswith("_endpoint_url")},
+                "local_device": "cpu",
+                "local_dtype": self.cpu_dtype,
+                "runtime_profile": "auto",
+                "keep_models_loaded": False,
+                "max_loaded_models": 1,
+                "local_max_batch": 1,
+                "kdl_max_concurrent": 1,
+                "endpoint_timeout_s": max(self.endpoint_timeout_s, 3600.0),
+            }
+        )
 
 
 @lru_cache

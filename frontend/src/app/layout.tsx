@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "OCR Arena: find the open OCR model for your sensitive documents",
-    template: "%s · OCR Arena",
+    default: "Parsing Arena: find the open OCR model for your sensitive documents",
+    template: "%s · Parsing Arena",
   },
   description:
     "Test open-source OCR models of different sizes on your own documents and compare output quality and runtime per page. By AI Factory Austria.",

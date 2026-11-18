@@ -7,7 +7,6 @@ import threading
 from pathlib import Path
 from typing import BinaryIO
 
-import pypdfium2 as pdfium
 from PIL import Image, ImageSequence
 
 from . import storage
@@ -28,6 +27,24 @@ _pdfium_lock = threading.Lock()
 
 class DocumentError(ValueError):
     """The upload cannot be used (unsupported, too large, unreadable)."""
+
+
+class DocumentRuntimeUnavailable(RuntimeError):
+    """A server dependency is unavailable; the document itself is not invalid."""
+
+
+def _pdfium():
+    # Saved originals, thumbnails and rendered pages need no native PDF library.
+    # A missing/blocked DLL must not prevent the API from serving those results.
+    try:
+        import pypdfium2
+    except (ImportError, OSError) as exc:
+        raise DocumentRuntimeUnavailable(
+            "The PDF rendering library could not be loaded. Check the server's "
+            "PDFium installation and operating-system application-control logs. "
+            "Saved results and cached previews remain available."
+        ) from exc
+    return pypdfium2
 
 
 def sniff_extension(head: bytes) -> str | None:
@@ -74,7 +91,7 @@ def ingest(stream: BinaryIO, filename: str, *, max_bytes: int) -> Document:
         if page_count < 1:
             raise DocumentError("The document has no pages.")
         write_thumbnail(document_id, final_path, extension)
-    except DocumentError:
+    except (DocumentError, DocumentRuntimeUnavailable):
         shutil.rmtree(target_dir, ignore_errors=True)
         raise
     except Exception as exc:
@@ -95,7 +112,7 @@ def ingest(stream: BinaryIO, filename: str, *, max_bytes: int) -> Document:
 def count_pages(path: Path, extension: str) -> int:
     if extension == ".pdf":
         with _pdfium_lock:
-            pdf = pdfium.PdfDocument(path)
+            pdf = _pdfium().PdfDocument(path)
             try:
                 return len(pdf)
             finally:
@@ -114,7 +131,7 @@ def render_page(
     """
     if extension == ".pdf":
         with _pdfium_lock:
-            pdf = pdfium.PdfDocument(path)
+            pdf = _pdfium().PdfDocument(path)
             try:
                 page = pdf[page_number - 1]
                 try:

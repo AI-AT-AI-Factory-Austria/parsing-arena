@@ -17,7 +17,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <Link
       href="/"
-      aria-label="OCR Arena home"
+      aria-label="Parsing Arena home"
       className={clsx(
         "group inline-flex items-center gap-3 rounded-2xl bg-white/95 p-1.5 pr-4 shadow-float ring-1 ring-black/5 backdrop-blur",
         className,
@@ -25,7 +25,7 @@ export function Logo({ className }: { className?: string }) {
     >
       <LogoMark className="size-10 transition-transform duration-200 group-hover:-rotate-3" />
       <span className="font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.08em] text-ink">
-        OCR
+        Parsing
         <br />
         Arena
       </span>

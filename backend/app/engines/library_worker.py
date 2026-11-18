@@ -19,6 +19,7 @@ from pathlib import Path
 
 from ..config import BACKEND_DIR
 from .base import PageOutput, PageSource, ParseOutput, Report
+from .cpu_runtime import cpu_llama_args, cpu_subprocess_env
 from .tools import CpuEngine
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,8 @@ class LibraryRuntime:
     def load(self):
         env = os.environ.copy()
         env.update(PYTHONUTF8="1", HF_HUB_DISABLE_PROGRESS_BARS="1", OMP_NUM_THREADS="4")
+        if self.settings.local_device == "cpu":
+            env = cpu_subprocess_env(env, self.settings.cpu_threads)
         python = sys.executable
         if self.preset.startswith("marker_"):
             python = str(marker_python(self.settings))
@@ -96,6 +99,19 @@ class LibraryRuntime:
             binary = find_tool(self.settings, "llama")
             if binary:
                 env["LLAMA_CPP_BINARY"] = binary
+            if self.settings.local_device == "cpu":
+                env.update(
+                    LLAMA_CPP_NGL="0",
+                    LLAMA_CPP_NO_MMPROJ_OFFLOAD="True",
+                    LLAMA_CPP_EXTRA_ARGS=" ".join(cpu_llama_args(self.settings.cpu_threads)),
+                    FAST_DETECTOR_DEVICE="cpu",
+                )
+                for name in (
+                    "DETECTOR_SERVER_URL",
+                    "OCR_ERROR_SERVER_URL",
+                    "FAST_LAYOUT_SERVER_URL",
+                ):
+                    env.pop(name, None)
         else:
             java = find_tool(self.settings, "java")
             if java:
@@ -179,7 +195,11 @@ class LibraryEngine(CpuEngine):
 
     @property
     def backend_kind(self):
-        return "local" if self.model.id == "marker_balanced" else "cpu"
+        return (
+            "local"
+            if self.model.id == "marker_balanced" and self.settings.local_device != "cpu"
+            else "cpu"
+        )
 
     def unavailable_reason(self):
         if self.model.id == "marker_balanced" and not self.settings.local_inference:

@@ -32,7 +32,14 @@ def test_conversion_exports_only_the_selected_page(extension, number, doc_page):
     assert runtime.convert_page(pages, number) == ("Selected page", [])
     kwargs = {"page_range": (number, number)} if extension == ".pdf" else {}
     runtime.converter.convert.assert_called_once_with(str(source), raises_on_error=False, **kwargs)
-    document.export_to_markdown.assert_called_once_with(page_no=doc_page)
+    from docling_core.types.doc import ContentLayer
+
+    document.export_to_markdown.assert_called_once_with(
+        page_no=doc_page,
+        included_content_layers={ContentLayer.BODY, ContentLayer.FURNITURE},
+        traverse_pictures=True,
+        include_picture_classification=False,
+    )
 
 
 def test_truncated_conversion_is_reported_as_a_page_failure():

@@ -28,9 +28,10 @@ def health(request: Request) -> HealthOut:
 
 
 @router.get("/models", response_model=ModelsOut)
-def list_models(request: Request) -> ModelsOut:
-    registry = request.app.state.registry
+def list_models(request: Request, cpu_only: bool = False) -> ModelsOut:
+    registry = request.app.state.registry.for_mode(cpu_only)
     return ModelsOut(
+        cpu_only=registry.settings.local_device == "cpu",
         models=[model_out(m, registry) for m in MODELS],
         reference=model_out(REFERENCE, registry),
         llamaparse_credits_per_page=LLAMAPARSE_CREDITS_PER_PAGE,

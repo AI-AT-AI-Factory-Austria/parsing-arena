@@ -275,7 +275,7 @@ MODELS: list[ArenaModel] = [
         lineage="Baidu Unlimited-OCR 2; BF16 GGUF decoder with F16 vision encoder",
         pipeline=(
             "All selected pages in one request (up to 16 by default); 1024px global views, "
-            "DASH routing and page-relative RoPE. Patched llama.cpp on local Vulkan/CUDA; "
+            "DASH routing and page-relative RoPE. Patched llama.cpp on local CPU/Vulkan/CUDA; "
             "masked dense computation, without the optimized sparse-memory scaling."
         ),
         links={"runtime": "https://huggingface.co/RX5950XT/Unlimited-OCR-2-GGUF"},

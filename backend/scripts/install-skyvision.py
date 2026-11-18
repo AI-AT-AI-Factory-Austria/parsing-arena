@@ -68,7 +68,13 @@ def main():
     # Return a failed page on token exhaustion, rather than a successful partial extraction.
     model_source = source / "src/models/nemotron_parse/nemotron_parse_model.cpp"
     text = model_source.read_text(encoding="utf-8")
-    marker = "OCR Arena: output token limit reached; page is incomplete."
+    marker = "Parsing Arena: output token limit reached; page is incomplete."
+    # Upgrade sources patched before the project was renamed without applying
+    # the token-cap patch a second time.
+    legacy_marker = "OCR Arena: output token limit reached; page is incomplete."
+    if legacy_marker in text:
+        text = text.replace(legacy_marker, marker)
+        model_source.write_text(text, encoding="utf-8")
     if marker not in text:
         old = (
             "    if (generated >= max_new && cur != id_eos)\n"

@@ -78,7 +78,7 @@ def sync_samples(session: Session) -> list[SampleDocument]:
                 else:
                     sample.filename = path.name
                 found.append(sample)
-            except (OSError, documents.DocumentError) as exc:
+            except (OSError, documents.DocumentError, documents.DocumentRuntimeUnavailable) as exc:
                 logger.warning("Skipping unreadable sample %s: %s", path.name, exc)
         # Commit under the lock so simultaneous discovery cannot import duplicates.
         session.commit()

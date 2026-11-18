@@ -31,6 +31,8 @@ def upload_document(file: UploadFile, session: Session = Depends(get_session)) -
         )
     except documents.DocumentError as exc:
         raise HTTPException(422, str(exc)) from exc
+    except documents.DocumentRuntimeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     session.add(document)
     session.flush()
     return document_out(document)
@@ -38,8 +40,11 @@ def upload_document(file: UploadFile, session: Session = Depends(get_session)) -
 
 @router.post("/documents/sample", response_model=DocumentOut, status_code=201)
 def use_sample_document(session: Session = Depends(get_session)) -> DocumentOut:
-    with SAMPLE_PATH.open("rb") as fh:
-        document = documents.ingest(fh, SAMPLE_PATH.name, max_bytes=50 * 1024 * 1024)
+    try:
+        with SAMPLE_PATH.open("rb") as fh:
+            document = documents.ingest(fh, SAMPLE_PATH.name, max_bytes=50 * 1024 * 1024)
+    except documents.DocumentRuntimeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     session.add(document)
     session.flush()
     return document_out(document)
@@ -71,10 +76,17 @@ def get_thumbnail(document_id: str, session: Session = Depends(get_session)) -> 
 
 @router.get("/documents/{document_id}/pages/{page_number}")
 def get_page_image(
-    document_id: str, page_number: int, session: Session = Depends(get_session)
+    document_id: str, page_number: int, session: Session = Depends(get_session),
+    thumbnail: bool = False,
 ) -> FileResponse:
     document = _get_document(session, document_id)
     if not 1 <= page_number <= document.page_count:
         raise HTTPException(404, "Page not found.")
-    path = documents.page_image(document, page_number, dpi=get_settings().render_dpi)
+    try:
+        path = documents.page_image(
+            document, page_number, dpi=48 if thumbnail else get_settings().render_dpi,
+            max_pixels=160_000 if thumbnail else None,
+        )
+    except documents.DocumentRuntimeUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     return FileResponse(path, media_type="image/png", headers=IMMUTABLE)

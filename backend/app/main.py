@@ -34,10 +34,10 @@ async def lifespan(app: FastAPI):
     yield
     await runner.stop()
     await judge.stop()
-    await registry.pool.close()
+    await registry.close()
 
 
-app = FastAPI(title="OCR Arena API", version=__version__, lifespan=lifespan)
+app = FastAPI(title="Parsing Arena API", version=__version__, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,

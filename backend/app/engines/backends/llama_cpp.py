@@ -1,4 +1,4 @@
-"""Pinned full-precision GGUF conversions, served locally on the AMD Vulkan GPU.
+"""Pinned full-precision GGUF conversions, served locally on GPU or CPU.
 
 The engine still owns prompts, page rendering, crops and output normalization.
 Only model inference changes. No document leaves the loopback interface.
@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from ...config import Settings
+from ..cpu_runtime import cpu_llama_args, cpu_subprocess_env
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,9 @@ class LlamaCppRuntime:
         self.model_id, self.settings = model_id, settings
         self.spec = spec or GGUF_MODELS[model_id]
         self.binary, self.device = binary, device
+        self.cpu_only = settings.local_device == "cpu"
+        if self.cpu_only:
+            self.device = "CPU"
         self.flash_attention, self.image_max_tokens = flash_attention, image_max_tokens
         self.extra_args = extra_args
         self.context_length = context_length
@@ -90,8 +94,19 @@ class LlamaCppRuntime:
         atexit.register(self.unload)
         binary = self.binary or llama_binary(self.settings)
         if not binary:
-            raise RuntimeError("Install the Vulkan llama-server or set LLAMA_CPP_BINARY.")
+            raise RuntimeError("Install llama-server or set LLAMA_CPP_BINARY.")
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        if self.cpu_only:
+            self.device_name = "CPU"
+        else:
+            self._find_gpu(binary, flags)
+        model, projector = [
+            hf_hub_download(self.spec.repo, name, revision=self.spec.revision)
+            for name in (self.spec.model_file, self.spec.projector_file)
+        ]
+        self._start(binary, model, projector, flags)
+
+    def _find_gpu(self, binary: str, flags: int) -> None:
         devices = subprocess.run(
             [binary, "--list-devices"],
             capture_output=True,
@@ -106,10 +121,8 @@ class LlamaCppRuntime:
         self.device_name = next((line.strip() for line in lines if f"{self.device}:" in line), "")
         if not self.device_name:
             raise RuntimeError(f"This llama-server cannot find GPU {self.device}.")
-        model, projector = [
-            hf_hub_download(self.spec.repo, name, revision=self.spec.revision)
-            for name in (self.spec.model_file, self.spec.projector_file)
-        ]
+
+    def _start(self, binary: str, model: str, projector: str, flags: int) -> None:
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
@@ -135,14 +148,20 @@ class LlamaCppRuntime:
             str(self.context_length),
             "--fit",
             "off",
-            "--device",
-            self.device,
-            "--mmproj-device",
-            self.device,
-            "--gpu-layers",
-            "all",
-            "--flash-attn",
-            "on" if self.flash_attention else "off",
+            *(
+                cpu_llama_args(self.settings.cpu_threads)
+                if self.cpu_only
+                else [
+                    "--device",
+                    self.device,
+                    "--mmproj-device",
+                    self.device,
+                    "--gpu-layers",
+                    "all",
+                    "--flash-attn",
+                    "on" if self.flash_attention else "off",
+                ]
+            ),
             "--jinja",
             "--reasoning",
             "off",
@@ -157,13 +176,16 @@ class LlamaCppRuntime:
                 stdout=self.log_file,
                 stderr=subprocess.STDOUT,
                 creationflags=flags,
+                env=cpu_subprocess_env(dict(os.environ), self.settings.cpu_threads)
+                if self.cpu_only
+                else None,
             )
             self.client = httpx.Client(
                 base_url=f"http://127.0.0.1:{port}",
                 timeout=self.settings.endpoint_timeout_s,
                 trust_env=False,
             )
-            deadline = time.monotonic() + 180
+            deadline = time.monotonic() + (600 if self.cpu_only else 180)
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
                     raise RuntimeError(f"Local model server exited; see {log_path}.")

@@ -48,6 +48,8 @@ export function Comparison({
   onSelectRun,
   onJudge,
   judgeBusy,
+  pageSelection,
+  onPageChange,
 }: {
   experiment: ExperimentDetail;
   models: Map<string, ArenaModel>;
@@ -55,10 +57,14 @@ export function Comparison({
   onSelectRun: (id: string) => void;
   onJudge?: () => void;
   judgeBusy: boolean;
+  pageSelection?: PageChoice;
+  onPageChange?: (page: PageChoice) => void;
 }) {
   const pages = experiment.pages;
   const sectionRef = useRef<HTMLElement>(null);
-  const [page, setPage] = useState<PageChoice>(pages[0] ?? 1);
+  const [localPage, setLocalPage] = useState<PageChoice>(pages[0] ?? 1);
+  const page = pageSelection ?? localPage;
+  const setPage = onPageChange ?? setLocalPage;
   const [view, setView] = useState<ViewMode>("rendered");
   const [showLayout, setShowLayout] = useState(false);
   const selectedIndex = Math.max(0, experiment.runs.findIndex((r) => r.id === selectedRunId));
@@ -100,15 +106,40 @@ export function Comparison({
 
   return (
     <section ref={sectionRef} id="comparison" aria-labelledby="compare-heading" className="space-y-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h2 id="compare-heading" className="text-2xl tracking-tight">
-            Compare the outputs
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Pick a model to compare with the original. Use ← and → to switch models.
-          </p>
-        </div>
+      <div>
+        <h2 id="compare-heading" className="text-2xl tracking-tight">
+          Compare the outputs
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Pick a model to compare with the original. Use ← and → to switch models.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Model results">
+        <span className="eyebrow mr-1 text-[11px]">Model</span>
+        {experiment.runs.map((run) => {
+          const selected = run.id === selectedRun?.id;
+          return (
+            <button
+              key={run.id}
+              type="button"
+              aria-pressed={selected}
+              aria-controls="selected-model-output"
+              onClick={() => onSelectRun(run.id)}
+              className={clsx(
+                "rounded-full border px-3.5 py-2 text-sm transition-colors",
+                selected
+                  ? "border-ink bg-ink text-white"
+                  : "border-line bg-white text-muted hover:border-ash hover:text-ink",
+              )}
+            >
+              {run.model_name}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex xl:justify-end">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 rounded-full bg-white p-1 shadow-card">
             <button
@@ -158,30 +189,6 @@ export function Comparison({
             ]}
           />
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Model results">
-        <span className="eyebrow mr-1 text-[11px]">Model</span>
-        {experiment.runs.map((run) => {
-          const selected = run.id === selectedRun?.id;
-          return (
-            <button
-              key={run.id}
-              type="button"
-              aria-pressed={selected}
-              aria-controls="selected-model-output"
-              onClick={() => onSelectRun(run.id)}
-              className={clsx(
-                "rounded-full border px-3.5 py-2 text-sm transition-colors",
-                selected
-                  ? "border-ink bg-ink text-white"
-                  : "border-line bg-white text-muted hover:border-ash hover:text-ink",
-              )}
-            >
-              {run.model_name}
-            </button>
-          );
-        })}
       </div>
 
       <div className="grid min-w-0 gap-4 md:grid-cols-2">

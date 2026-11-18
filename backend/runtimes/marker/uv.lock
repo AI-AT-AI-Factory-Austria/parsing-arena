@@ -1066,7 +1066,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ocr-arena-marker-runtime"
+name = "parsing-arena-marker-runtime"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

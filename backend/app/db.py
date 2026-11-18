@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -39,6 +39,23 @@ def init_db() -> None:
     from . import models  # noqa: F401  (registers tables)
 
     Base.metadata.create_all(get_engine())
+    # Additive migration for existing SQLite installations. Historical runs keep
+    # their original execution mode and all documents/results stay untouched.
+    engine = get_engine()
+    if "cpu_only" not in {c["name"] for c in inspect(engine).get_columns("experiments")}:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "ALTER TABLE experiments ADD COLUMN cpu_only BOOLEAN NOT NULL DEFAULT 0"
+            )
+    if "batch_id" not in {c["name"] for c in inspect(engine).get_columns("experiments")}:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "ALTER TABLE experiments ADD COLUMN batch_id VARCHAR(32) "
+                "REFERENCES batches(id) ON DELETE CASCADE"
+            )
+            connection.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_experiments_batch_id ON experiments (batch_id)"
+            )
 
 
 @contextmanager

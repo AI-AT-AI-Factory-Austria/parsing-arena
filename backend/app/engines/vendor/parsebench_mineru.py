@@ -1,6 +1,6 @@
 """MinerU 2.5 Pro output normalization.
 
-[ocr-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
+[parsing-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
 ``src/parse_bench/inference/providers/parse/mineru2605pro.py`` (static helpers of
 ``MinerU2605ProProvider``, unchanged). ``normalize_markdown`` applies them in the order of
 the provider's ``normalize``.

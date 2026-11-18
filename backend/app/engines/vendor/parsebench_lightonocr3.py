@@ -1,6 +1,6 @@
 r"""LightOnOCR-3 output normalization.
 
-[ocr-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
+[parsing-arena] Vendored from run-llama/ParseBench (Apache-2.0), commit 0ccc167:
 ``src/parse_bench/inference/providers/parse/lightonocr-3.py`` and the two table helpers of
 ``qwen.py``. The functions are unchanged; ``normalize_page`` restates the provider's
 ``_normalize_page`` without ParseBench's layout schema.
