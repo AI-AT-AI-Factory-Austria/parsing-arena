@@ -2,6 +2,183 @@
 
 Evaluate the open-source OCR models that best suit your documents.
 
+## Start here
+
+Choose the installation for the machine that will **run** the models. Everyone else
+can use the app in a browser; they do not need Python, PyTorch or a GPU locally.
+
+| Your machine | Recommended setup | What runs where |
+| --- | --- | --- |
+| Linux or Windows with Docker Desktop, no GPU required | **CPU containers** | All extraction stays on CPU; 19 presets enabled, five slow presets disabled |
+| Linux server with an NVIDIA GPU | **NVIDIA containers** | CUDA/PyTorch plus CUDA llama.cpp; CPU tools stay on CPU |
+| Windows with AMD Radeon 8060S / Ryzen AI Max (`gfx1151`) | **Native Windows setup** | ROCm/PyTorch and Vulkan llama.cpp, matching the tested laptop setup |
+
+The containers package the Python environments, Java, Tesseract (English/German),
+Chromium for cross-page tables, Marker, llama.cpp, SkyVision and Unlimited's separate
+patched runtime. You do not install each parser yourself. Dependencies are locked;
+native runtimes use pinned source revisions or checksum-verified releases. Model weights download **on first use**
+and are cached. The first image build and first model run take longer than later starts.
+No API keys are required for local parsing.
+
+### CPU containers — one command
+
+Install [Docker with Compose](https://docs.docker.com/compose/install/), clone this repo,
+and run from its root:
+
+```bash
+docker compose up --build -d
+```
+
+Open **http://localhost:3000**. There is no `.env` setup step. The CPU image enforces
+CPU execution and the checkbox reflects that. Infinity-Parser2-Flash, Aeddix, GLM-OCR,
+florin and docTR Large remain disabled in this mode because of their long processing times.
+
+The provided images target **Linux x86-64 with AVX2**. On Windows use Docker Desktop's
+Linux-container/WSL2 backend. ARM/Apple Silicon images are not provided. Allocate adequate
+resources to Docker: 8 CPU threads and 32 GB RAM are a practical starting point for
+trying the larger models, with 50+ GB free disk for builds and model caches. These are
+planning estimates, not a guarantee for every document; start with one page and small models.
+
+```bash
+docker compose logs -f                      # Startup and processing logs
+docker compose stop                        # Stop; keep documents, keys and cached models
+docker compose up -d                       # Start again; no rebuild or redownload
+docker compose exec backend python /opt/arena/check-install.py --smoke
+```
+
+The check verifies dependencies, model availability, browser rendering and a bundled-page
+pypdf extraction without calling document-processing APIs. CPU inference can still take
+minutes per page for larger models.
+
+### NVIDIA containers — Linux GPU server
+
+Install the host's NVIDIA driver and the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+Then use the GPU override:
+
+```bash
+docker compose -f compose.yaml -f compose.nvidia.yaml up --build -d
+docker compose -f compose.yaml -f compose.nvidia.yaml exec backend python /opt/arena/check-install.py --smoke
+```
+
+Use both files for subsequent `up`, `stop` and `logs` commands too. The image includes
+CUDA 12.8 and PyTorch 2.11.0; the host needs a compatible NVIDIA driver. It reserves one
+GPU and fails with a clear message if GPU access is missing. The check also executes
+CUDA and Triton/FlexAttention kernels. This variant must be validated on the deployment
+GPU; a successful CPU-container check does not validate NVIDIA inference.
+
+The CUDA image uses the official, checksum-verified llama.cpp release and compiles
+Unlimited-OCR's separate patched runtime. That first build can still take an hour or
+more on a modest build machine. Builders with spare CPU/RAM can increase parallelism
+using `docker compose -f compose.yaml -f compose.nvidia.yaml build --build-arg NATIVE_BUILD_JOBS=8 backend`.
+For a team rollout, build and publish once, then use the pull-only instructions below.
+Allow more disk space for the CUDA toolchain and build cache than for the CPU image.
+
+The native CUDA paths make all 24 presets eligible, subject to GPU compatibility and
+available memory. Model weights, page complexity and multi-page context affect memory
+usage; a 24 GB GPU is a sensible starting point, not a promise that every workload fits.
+The same app can still run an individual batch in CPU-only mode.
+
+### Windows / AMD — native installation
+
+For the Radeon 8060S, use the native ROCm/Vulkan environment. Docker Desktop's documented
+[GPU passthrough](https://docs.docker.com/desktop/features/gpu/) is for NVIDIA; the CPU
+container does not accelerate these models on an AMD GPU.
+
+Install **signed Python 3.13** from [python.org](https://www.python.org/downloads/windows/)
+with the `py` launcher, **Node.js 22 LTS**, [uv](https://docs.astral.sh/uv/getting-started/installation/),
+and the AMD driver compatible with the `gfx1151` ROCm wheel set. Then run in PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1 -Profile windows-amd
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-windows.ps1
+```
+
+Setup creates the main Python environment and Marker's separate CPU environment, installs
+the pinned runtimes and Chromium, installs Tesseract through `winget` if needed, and builds
+the frontend. It records the selected profile in `data/installation.json` and preserves
+an existing `.env`. Tesseract's installer may request elevation. Use `-CheckOnly` to check
+prerequisites without installing anything. Other AMD GPU families require their own
+compatible PyTorch/driver setup; the supplied AMD preset is specifically for `gfx1151`.
+The command-scoped execution policy allows these repository scripts to run without
+changing the machine's permanent PowerShell policy.
+
+`start-windows.ps1` launches hidden backend/frontend processes and prints their PIDs;
+logs are under `data/logs/`. It refuses to start a duplicate on occupied ports. Restart
+with the same command after stopping the previous processes. Stop each process tree with
+`taskkill /PID <PID> /T /F`, using the printed PIDs, after active runs finish. For a native CPU installation,
+run setup with `-Profile cpu` instead. Stop a running app before rebuilding its environments.
+
+### Storage, API keys and shared deployments
+
+The container setup uses two services: a production Next.js **frontend** and a FastAPI
+**backend** containing the sequential extraction worker and concurrent quality checks.
+Only frontend port 3000 is exposed, on localhost by default; API calls pass through it.
+Backend runtimes live in the image, while named Docker volumes preserve:
+
+- **`arena-data`**: uploaded documents, results, SQLite and UI-saved API keys.
+- **`model-cache`**: downloaded weights and parser caches, reused after restarts/upgrades.
+
+Deleting these volumes deletes that data. `docker compose down` keeps them; `down -v`
+does not. Container data is separate from a native checkout's `data/` folder. The saved-sample
+gallery starts empty: copy only the intended sample files into `/data/sample-docs` and
+prepare their results using the sample-gallery instructions below. No personal samples or `.env` files
+are baked into either image or sent in its build context.
+
+Enable optional judging and click Start to enter missing LlamaParse/Mistral keys in the
+confirmation dialog. Keys are saved server-side for this installation; entering **OK**
+is still required before external processing. Docker does not automatically pass the
+repo's private `.env` keys into containers. Operators can supply environment variables or
+Kubernetes Secrets explicitly instead. Keep shared access behind authentication and TLS:
+the app currently has shared storage/credentials, not separate user accounts.
+
+Set `ARENA_PORT` to change the host port. For a shared URL set `ARENA_BIND` and
+`CORS_ORIGINS` (a JSON list of allowed frontend origins) explicitly, for example in a
+separate deployment env file. Keep it behind your authenticated reverse proxy.
+Custom ports also need matching origins for the API-key dialog.
+
+For Kubernetes, use these same two images. Name the backend Service `backend` on port
+8000, or build the frontend with `--build-arg BACKEND_URL=http://your-service:8000`.
+The proxy destination is fixed at frontend build time; its server-side `BACKEND_URL`
+must agree. Keep **one backend replica / one Uvicorn worker** with the current SQLite and
+in-process queue; use persistent volumes for `/data` and `/cache` (writable by UID/GID
+10001), and request one `nvidia.com/gpu` for the NVIDIA image. Put ingress/authentication
+in front of the frontend. Stopping containers releases processes; it does not stop billing
+for a GPU VM. GPU provisioning/shutdown automation is separate from this packaging.
+
+### Build once, distribute images
+
+The commands above build locally; there is **no published image required**. Maintainers
+can manually run **Actions → Build container images**, choose CPU, NVIDIA or both
+(the frontend is always included), and opt in to publishing to their repo's GitHub Container Registry. The
+CPU image is smoke-tested before publication; NVIDIA needs the GPU check above on a
+real deployment host. Set package visibility/access deliberately before distributing it.
+
+Once images are published, users can skip compilation by setting
+`ARENA_FRONTEND_IMAGE=ghcr.io/OWNER/REPO/frontend:latest` and
+`ARENA_BACKEND_IMAGE=ghcr.io/OWNER/REPO/backend:cpu` (or `:nvidia`) in a deployment env file:
+
+```bash
+docker compose --env-file deployment.env pull
+docker compose --env-file deployment.env up -d --no-build
+```
+
+Add `-f compose.yaml -f compose.nvidia.yaml` for NVIDIA. For controlled releases, distribute
+immutable image digests instead of moving tags. No workflow runs or image publication are
+triggered by installing or starting the app.
+
+### Reading the runtime labels
+
+**Local CPU**, **Local AMD GPU · ROCm**, **Local AMD GPU · Vulkan**, and
+**Local NVIDIA GPU · CUDA** describe the machine hosting Parsing Arena. **Remote model
+server** means a configured inference endpoint; **Hosted API** means LlamaParse. PyTorch
+is the inference framework and ROCm/CUDA its GPU runtime; Vulkan is used by llama.cpp.
+GGUF and F16/BF16 describe weight format/precision, so they appear in runtime tooltips
+instead of being mixed into the hardware label. Marker Balanced's tooltip explains its
+GPU OCR plus CPU auxiliary models.
+
+## Models and comparison
+
 Drop in PDFs or images and select up to 12 unique pages across them. Parsing Arena parses
 the batch with open OCR models of different sizes, times
 every run, and shows each model's output next to the original page and next to
@@ -424,9 +601,26 @@ environment) retain their own setup instructions below.
 cp .env.example .env        # Windows: Copy-Item .env.example .env
 ```
 
-Put your LlamaParse key into `.env` as `LLAMA_CLOUD_API_KEY=llx-...`. Keys are region-specific:
-for an EU account, also set `LLAMA_CLOUD_BASE_URL=https://api.cloud.eu.llamaindex.ai`. Without a
-key the arena still works, but only with the open models.
+No API keys are needed for local parsing. For optional automatic judging, select
+**LlamaParse Agentic Plus** and start a run. The confirmation dialog asks for any missing
+LlamaParse and Mistral keys. Choose the region matching your LlamaParse account and click
+**Save API keys**, then type **OK** to confirm the external processing. Saving alone does
+not start a run or send documents. Keys are checked by the providers when a run uses them.
+
+Saved keys apply to the **whole installation**, including CPU runs, and survive backend
+restarts in `DATA_DIR/judging-keys.json` (`data/judging-keys.json` by default). This is a
+gitignored, server-side **plaintext** file, never returned by the API or stored in browser
+storage. Restrict access to the data directory; on Windows it inherits the directory's
+permissions, and on Linux the file is created with owner-only permissions. Persist the
+data volume when deploying containers. Keep a shared deployment behind authentication:
+users with access to the app can supply missing keys and use the installation's API credits.
+
+Alternatively, configure `LLAMA_CLOUD_API_KEY` and `MISTRAL` (or `MISTRAL_API_KEY`) in `.env`
+or the server environment. These take precedence over saved keys. For an EU LlamaParse key,
+set `LLAMA_CLOUD_BASE_URL=https://api.cloud.eu.llamaindex.ai`. Existing keys are never exposed
+or overwritten through the dialog; to replace a saved key, edit the server's key file or
+configure the replacement in the environment and restart the backend. Set `CORS_ORIGINS`
+to include the frontend's origin when deploying at a custom URL.
 
 ### 2. Backend
 
@@ -524,7 +718,8 @@ Infinity-Parser2-Flash needs its own serving setup; follow its model card, then 
 
 ## Configuration
 
-All settings are environment variables (or entries in `.env`):
+Settings are environment variables (or entries in `.env`). Missing judging API keys can
+also be saved through the confirmation dialog as described above:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

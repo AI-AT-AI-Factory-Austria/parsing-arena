@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+judging-keys.json
+.judging-keys-*
 
 # Uploaded documents, rendered pages, results and the SQLite database
 data/

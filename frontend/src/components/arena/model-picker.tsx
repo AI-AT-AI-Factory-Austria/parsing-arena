@@ -2,18 +2,9 @@ import clsx from "clsx";
 import { Check } from "lucide-react";
 import { groupModelsBySize, modelSizeLabel } from "@/lib/model-presentation";
 import type { ArenaModel, Health } from "@/lib/types";
+import { executionLabel } from "@/lib/execution-label";
 
-function backendLabel(model: ArenaModel, health: Health): string {
-  const backend = model.availability.backend;
-  if (backend === "api") return "Hosted API";
-  if (backend === "endpoint") return "vLLM endpoint";
-  if (model.availability.runtime_label) return model.availability.runtime_label;
-  if (backend === "cpu") return "CPU";
-  const device = health.local_device;
-  return device?.available && device.device !== "cpu" ? "Local GPU" : "Local CPU";
-}
-
-export function ModelPicker({ models, health, selected, onToggle }: {
+export function ModelPicker({ models, selected, onToggle }: {
   models: ArenaModel[];
   health: Health;
   selected: string[];
@@ -76,8 +67,8 @@ export function ModelPicker({ models, health, selected, onToggle }: {
                             <span className="font-medium text-muted">Strengths: </span>
                             <span>{model.specialty}</span>
                           </span>
-                          <span className="mt-1.5 block text-[11px] leading-4 text-faint">
-                            {model.publisher} · {backendLabel(model, health)}
+                          <span className="mt-1.5 block text-[11px] leading-4 text-faint" title={model.availability.execution_detail ?? undefined}>
+                            {model.publisher} · {executionLabel(model.availability)}
                           </span>
                           {model.id === "unlimited-ocr-2" && (
                             <span className="mt-1.5 block text-xs leading-5 text-muted">

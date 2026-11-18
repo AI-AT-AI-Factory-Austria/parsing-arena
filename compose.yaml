@@ -1,0 +1,43 @@
+name: parsing-arena
+
+services:
+  frontend:
+    image: ${ARENA_FRONTEND_IMAGE:-parsing-arena/frontend:local}
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+    ports:
+      - "${ARENA_BIND:-127.0.0.1}:${ARENA_PORT:-3000}:3000"
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+
+  backend:
+    image: ${ARENA_BACKEND_IMAGE:-parsing-arena/backend:cpu-local}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    environment:
+      LOCAL_DEVICE: cpu
+      RUNTIME_PROFILE: auto
+      CUDA_VISIBLE_DEVICES: "-1"
+      CPU_THREADS: ${CPU_THREADS:-8}
+      MAX_LOADED_MODELS: "1"
+      KEEP_MODELS_LOADED: "false"
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}'
+    volumes:
+      - arena-data:/data
+      - model-cache:/cache
+    shm_size: 2gb
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+
+volumes:
+  arena-data:
+  model-cache:

@@ -5,6 +5,7 @@ import type {
   Experiment,
   ExperimentDetail,
   Health,
+  JudgingKeyStatus,
   ModelsResponse,
   SampleDocument,
 } from "./types";
@@ -96,6 +97,13 @@ function uploadDocument(
 }
 
 export const api = {
+  judgingKeys: () => request<JudgingKeyStatus>("/api/settings/judging", { cache: "no-store" }),
+  saveJudgingKeys: (body: { llama_cloud_api_key?: string; mistral_api_key?: string; llamaparse_region?: "us" | "eu" }) =>
+    request<JudgingKeyStatus>("/api/settings/judging", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Parsing-Arena-Setup": "1" },
+      body: JSON.stringify(body),
+    }),
   health: () => request<Health>("/api/health"),
   models: (cpuOnly = false) => request<ModelsResponse>(`/api/models?cpu_only=${cpuOnly}`),
   uploadDocument,

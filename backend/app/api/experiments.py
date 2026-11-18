@@ -53,6 +53,8 @@ def build_experiment(
 ) -> Experiment:
     """Validate and construct without committing or starting any work."""
     registry = request.app.state.registry.for_mode(cpu_only)
+    # A CPU installation enforces this independently of the browser's checkbox.
+    cpu_only = cpu_only or registry.settings.local_device == "cpu"
     selected: list[str] = []
     for model_id in dict.fromkeys(model_ids):
         model = ALL_MODELS.get(model_id)

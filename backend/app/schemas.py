@@ -29,6 +29,8 @@ class AvailabilityOut(BaseModel):
     reason: str | None = None
     loaded: bool | None = None
     runtime_label: str | None = None
+    execution_label: str | None = None
+    execution_detail: str | None = None
     max_pages: int | None = None
 
 

@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -10,7 +11,7 @@ REPO_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
-    """All configuration comes from environment variables or the repo-level `.env`."""
+    """Environment configuration, supplemented by saved installation API keys."""
 
     model_config = SettingsConfigDict(
         env_file=(REPO_DIR / ".env", BACKEND_DIR / ".env"),
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
 
     # Storage
     data_dir: Path = REPO_DIR / "data"
+    runtime_dir: Path | None = None  # Read-only binaries may live outside the data volume.
     max_upload_mb: int = 100
     max_pages_per_experiment: int = 50
 
@@ -111,6 +113,10 @@ class Settings(BaseSettings):
         return f"sqlite:///{(self.data_dir / 'arena.db').as_posix()}"
 
     @property
+    def runtime_root(self) -> Path:
+        return self.runtime_dir or self.data_dir / "runtimes"
+
+    @property
     def llamaparse_configured(self) -> bool:
         return bool(self.llama_cloud_api_key.strip())
 
@@ -137,4 +143,13 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    from .credentials import CredentialStoreError, apply_saved_credentials
+
+    settings = Settings()
+    try:
+        apply_saved_credentials(settings)
+    except CredentialStoreError:
+        logging.getLogger(__name__).warning(
+            "Saved API keys could not be loaded; check judging-keys.json."
+        )
+    return settings

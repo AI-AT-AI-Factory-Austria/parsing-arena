@@ -1,0 +1,19 @@
+# Build only application sources. Never send documents, keys, local environments or Git history.
+**/.env
+**/.env.*
+**/judging-keys.json
+**/.judging-keys-*
+.git
+data
+exports
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.pyc
+**/*.tsbuildinfo
+.cursor
+.agents
+**/*.log

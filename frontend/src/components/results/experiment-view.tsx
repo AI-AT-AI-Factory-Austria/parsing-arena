@@ -56,7 +56,7 @@ export function ExperimentView({ id }: { id: string }) {
   const catalog = usePolling("models", () => api.models(), () => null);
   const [busy, setBusy] = useState<"rerun" | "delete" | "judge" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmJudging, setConfirmJudging] = useState(false);
+  const [confirmJudging, setConfirmJudging] = useState<"run" | "judge" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState("");
 
@@ -102,7 +102,7 @@ export function ExperimentView({ id }: { id: string }) {
   const doc = experiment.document;
   const active = isActive(experiment);
   const judging = experiment.runs.some(isJudging);
-  const canJudge = experiment.judge_configured && experiment.runs.some(
+  const canJudge = experiment.runs.some(
     (r) => r.kind === "reference" && r.status === "completed",
   ) && experiment.runs.some(
     (r) => r.kind !== "reference" && r.status === "completed" && (!r.judgment || r.judgment.status === "failed" || r.judgment.outdated),
@@ -156,10 +156,13 @@ export function ExperimentView({ id }: { id: string }) {
         <JudgingConfirmation
           filename={doc.filename}
           pageCount={experiment.pages.length}
-          onCancel={() => setConfirmJudging(false)}
+          mode={confirmJudging}
+          onKeysSaved={() => { catalog.refresh(); refresh(); }}
+          onCancel={() => setConfirmJudging(null)}
           onConfirm={() => {
-            setConfirmJudging(false);
-            void rerun();
+            setConfirmJudging(null);
+            if (confirmJudging === "judge") void judge();
+            else void rerun();
           }}
         />
       )}
@@ -201,7 +204,7 @@ export function ExperimentView({ id }: { id: string }) {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {canJudge && (
-              <button type="button" onClick={() => void judge()} disabled={busy !== null} className="btn btn-outline btn-sm">
+              <button type="button" onClick={() => setConfirmJudging("judge")} disabled={busy !== null} className="btn btn-outline btn-sm">
                 {busy === "judge" ? <Spinner className="size-3.5" /> : <Scale aria-hidden className="size-3.5" />}
                 Judge outputs
               </button>
@@ -210,7 +213,7 @@ export function ExperimentView({ id }: { id: string }) {
               type="button"
               onClick={() => {
                 if (experiment.runs.some((run) => run.kind === "reference")) {
-                  setConfirmJudging(true);
+                  setConfirmJudging("run");
                 } else {
                   void rerun();
                 }
@@ -284,7 +287,7 @@ export function ExperimentView({ id }: { id: string }) {
         models={models}
         selectedRunId={selectedRun?.id ?? ""}
         onSelectRun={setSelectedRunId}
-        onJudge={canJudge ? () => void judge() : undefined}
+        onJudge={canJudge ? () => setConfirmJudging("judge") : undefined}
         judgeBusy={busy === "judge"}
       />
 

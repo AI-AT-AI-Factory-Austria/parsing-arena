@@ -1,0 +1,21 @@
+# Linux x86-64 with the NVIDIA driver and NVIDIA Container Toolkit installed.
+# docker compose -f compose.yaml -f compose.nvidia.yaml up --build -d
+services:
+  backend:
+    image: ${ARENA_BACKEND_IMAGE:-parsing-arena/backend:nvidia-local}
+    build:
+      args:
+        BUILD_IMAGE: nvidia/cuda:12.8.1-devel-ubuntu24.04
+        RUN_IMAGE: nvidia/cuda:12.8.1-runtime-ubuntu24.04
+        ACCELERATOR: cuda
+    environment:
+      LOCAL_DEVICE: cuda
+      RUNTIME_PROFILE: linux-nvidia
+      CUDA_VISIBLE_DEVICES: "0"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

@@ -26,7 +26,16 @@ REVISION = "1e3e5f3e82435578cd1e3c191673e1444b617f52"
 VERSION = "b11913"
 ARCHIVE_SHA = "d9b27dfe8addb0782c59c194604dbab69ccef8493c8964a435d762c4be45e176"
 OVERLAY_SHA = "931f4842d9c261d0aa57ce6469f4f8297da4f9a7eb02852464478d8754a1d06d"
-ROOT = Path(__file__).resolve().parents[2] / "data/runtimes/unlimited-ocr2"
+ROOT = (
+    Path(
+        os.environ.get(
+            "RUNTIME_DIR",
+            Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
+            / "runtimes",
+        )
+    )
+    / "unlimited-ocr2"
+)
 
 
 def download(url: str, path: Path, sha: str | None = None) -> Path:
@@ -62,6 +71,9 @@ def extract(archive: Path, target: Path, strip_root: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--skip-device-check", action="store_true", help="Image builds without a GPU"
+    )
     parser.add_argument(
         "--download-model", action="store_true", help="Cache BF16 + F16 weights (~6.7 GB)"
     )
@@ -144,12 +156,34 @@ def main():
                     "-DCMAKE_BUILD_TYPE=Release",
                     f"-DGGML_CUDA={'OFF' if args.cpu else 'ON'}",
                     "-DGGML_VULKAN=OFF",
+                    "-DGGML_NATIVE=OFF",
+                    "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON",
+                    # Match upstream's CUDA Docker build: the build host need not
+                    # have a driver, and the GPU backend loads on the runtime host.
+                    *(
+                        [
+                            "-DGGML_BACKEND_DL=ON",
+                            "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined",
+                        ]
+                        if not args.cpu
+                        else []
+                    ),
+                    *(
+                        [f"-DCMAKE_CUDA_ARCHITECTURES={os.environ['CMAKE_CUDA_ARCHITECTURES']}"]
+                        if os.environ.get("CMAKE_CUDA_ARCHITECTURES")
+                        else []
+                    ),
                     "-DLLAMA_CURL=OFF",
+                    "-DLLAMA_BUILD_UI=OFF",
+                    "-DLLAMA_USE_PREBUILT_UI=OFF",
                 ],
                 check=True,
             )
             subprocess.run(
-                [cmake_bin, "--build", str(build), "--target", "llama-server", "-j", "4"],
+                [
+                    cmake_bin, "--build", str(build), "--target", "llama-server",
+                    "--parallel", os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "4"),
+                ],
                 check=True,
             )
             binary = build / "bin/llama-server"
@@ -167,7 +201,8 @@ def main():
             ),
             encoding="utf-8",
         )
-    subprocess.run([str(binary), "--list-devices"], check=True)
+    if not args.skip_device_check:
+        subprocess.run([str(binary), "--list-devices"], check=True)
     if args.download_model:
         for filename in ("Unlimited-OCR-2-BF16.gguf", "mmproj-Unlimited-OCR-2-F16.gguf"):
             print(f"Caching {filename}...", flush=True)

@@ -47,7 +47,7 @@ def find_tool(settings, name: str) -> str | None:
     system = shutil.which(name if name == "java" else "llama-server")
     if system:
         return system
-    root = settings.data_dir / "runtimes" / ("java" if name == "java" else "llama")
+    root = settings.runtime_root / ("java" if name == "java" else "llama")
     filename = ("java" if name == "java" else "llama-server") + (".exe" if os.name == "nt" else "")
     return next((str(p) for p in root.rglob(filename) if p.is_file()), None)
 

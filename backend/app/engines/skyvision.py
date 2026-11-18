@@ -29,7 +29,7 @@ def skyvision_binary(settings: Settings) -> str | None:
     if settings.skyvision_binary:
         return shutil.which(settings.skyvision_binary)
     path = (
-        settings.data_dir / "runtimes/skyvision" / ("vqa-cli.exe" if os.name == "nt" else "vqa-cli")
+        settings.runtime_root / "skyvision" / ("vqa-cli.exe" if os.name == "nt" else "vqa-cli")
     )
     return str(path) if path.is_file() else shutil.which("vqa-cli")
 

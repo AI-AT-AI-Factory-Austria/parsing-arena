@@ -4,6 +4,7 @@ from ..catalog import LLAMAPARSE_ID, MODELS, ArenaModel
 from ..config import Settings
 from .backends.transformers_local import LocalModelPool, describe_local_device
 from .doctr import DoctrEngine
+from .execution import execution_info
 from .glm import GlmOcrEngine
 from .granite import GraniteDoclingEngine
 from .infinity import InfinityParser2Engine
@@ -86,7 +87,11 @@ class EngineRegistry:
         """How (and whether) this server can run the model right now."""
         if model.id == LLAMAPARSE_ID:
             reason = self.llamaparse.unavailable_reason()
-            return {"runnable": reason is None, "backend": "api", "reason": reason}
+            return {
+                "runnable": reason is None, "backend": "api", "reason": reason,
+                "execution_label": "Hosted API",
+                "execution_detail": "Documents are sent to the LlamaParse API when selected.",
+            }
         engine = self._open.get(model.id)
         if engine is None:
             return {"runnable": False, "backend": None, "reason": "Not integrated yet."}
@@ -104,6 +109,9 @@ class EngineRegistry:
         }
         if self.settings.local_device == "cpu":
             info["runtime_label"] = getattr(engine, "runtime_label", None) or "Local CPU"
+        info["execution_label"], info["execution_detail"] = execution_info(
+            model.id, engine, self.settings, reason is None
+        )
         if engine.backend_kind == "local" and reason is None:
             info["loaded"] = engine.is_loaded()
         return info

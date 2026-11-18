@@ -31,7 +31,7 @@ EOS = ("<\uff5cend\u2581of\u2581sentence\uff5c>", "</s>")
 
 
 def installed_runtime(settings: Settings) -> tuple[Path, dict] | None:
-    root = settings.data_dir / "runtimes/unlimited-ocr2"
+    root = settings.runtime_root / "unlimited-ocr2"
     try:
         info = json.loads((root / "build-info.json").read_text(encoding="utf-8"))
         binary = (root / info["binary"]).resolve()

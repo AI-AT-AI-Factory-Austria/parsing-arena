@@ -2,22 +2,16 @@ import clsx from "clsx";
 import { ArrowUpRight, ServerOff } from "lucide-react";
 import { modelSizeLabel, sortModelsBySize } from "@/lib/model-presentation";
 import { getModels } from "@/lib/server-api";
+import { executionLabel } from "@/lib/execution-label";
 import type { ArenaModel } from "@/lib/types";
 import { Chip, Dot } from "@/components/ui";
-
-const BACKEND_LABEL: Record<string, string> = {
-  local: "Runs locally",
-  cpu: "Runs on the CPU",
-  endpoint: "vLLM endpoint",
-  api: "Hosted API",
-};
 
 function StatusCell({ model }: { model: ArenaModel }) {
   const { availability } = model;
   if (!availability.runnable) {
     return (
       <Chip tone="amber" title={availability.reason ?? undefined}>
-        <Dot /> {model.kind === "reference" ? "Needs API key" : "Setup needed"}
+        <Dot /> {model.kind === "reference" ? "Needs API key" : "Unavailable"}
       </Chip>
     );
   }
@@ -25,8 +19,8 @@ function StatusCell({ model }: { model: ArenaModel }) {
     <div className="flex flex-col items-start gap-1.5">
       <Chip tone="mint"><Dot /> In arena</Chip>
       {availability.backend && (
-        <span className="text-[11px] text-faint">
-          {availability.runtime_label ?? BACKEND_LABEL[availability.backend]}
+        <span className="text-[11px] text-faint" title={availability.execution_detail ?? undefined}>
+          {executionLabel(availability)}
         </span>
       )}
     </div>
@@ -101,6 +95,10 @@ export async function ModelsTable() {
           </tbody>
         </table>
       </div>
+      <p className="border-t border-line px-5 py-3 text-xs text-muted sm:px-6">
+        Local = the machine running Parsing Arena. CPU and GPU labels reflect this installation.
+        Hover over a runtime for implementation details.
+      </p>
     </div>
   );
 }

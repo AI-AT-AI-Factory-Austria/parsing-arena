@@ -54,6 +54,8 @@ def test_models_catalog(client):
         "reason": None,
         "loaded": None,
         "runtime_label": None,
+        "execution_label": "Local CPU",
+        "execution_detail": "Embedded PDF text; no neural model.",
         "max_pages": None,
     }
     rakedoc = body["models"][0]

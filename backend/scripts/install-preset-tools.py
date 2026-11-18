@@ -6,12 +6,18 @@ Marker's Python environment is installed separately with uv sync --project runti
 
 import hashlib
 import io
+import os
 import platform
 import urllib.request
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2] / "data" / "runtimes"
+ROOT = Path(
+    os.environ.get(
+        "RUNTIME_DIR",
+        Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[2] / "data")) / "runtimes",
+    )
+)
 TOOLS = {
     "java": (
         "https://github.com/adoptium/temurin21-binaries/releases/download/"

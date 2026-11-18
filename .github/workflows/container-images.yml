@@ -1,0 +1,73 @@
+name: Build container images
+on:
+  workflow_dispatch:
+    inputs:
+      images:
+        description: Backend images to build (frontend is always included)
+        type: choice
+        options: [cpu, nvidia, both]
+        default: cpu
+      publish:
+        description: Publish built images to this repository's GitHub Container Registry
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  packages: write
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(inputs.images == 'both' && '["frontend","cpu","nvidia"]' || inputs.images == 'nvidia' && '["frontend","nvidia"]' || '["frontend","cpu"]') }}
+    steps:
+      - name: Make room for ML images on this disposable hosted runner
+        if: matrix.variant != 'frontend'
+        run: |
+          # These preinstalled SDKs are unused; everything is built inside Docker.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache
+          df -h /
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Image configuration
+        id: image
+        shell: bash
+        run: |
+          namespace="ghcr.io/${GITHUB_REPOSITORY,,}"
+          if [ '${{ matrix.variant }}' = frontend ]; then
+            echo "tag=$namespace/frontend:latest" >> "$GITHUB_OUTPUT"
+            echo 'file=deploy/frontend.Dockerfile' >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$namespace/backend:${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
+            echo 'file=deploy/backend.Dockerfile' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/login-action@v4
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ steps.image.outputs.file }}
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.image.outputs.tag }}
+          build-args: |
+            BUILD_IMAGE=${{ matrix.variant == 'nvidia' && 'nvidia/cuda:12.8.1-devel-ubuntu24.04' || 'ubuntu:24.04' }}
+            RUN_IMAGE=${{ matrix.variant == 'nvidia' && 'nvidia/cuda:12.8.1-runtime-ubuntu24.04' || 'ubuntu:24.04' }}
+            ACCELERATOR=${{ matrix.variant == 'nvidia' && 'cuda' || 'cpu' }}
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }},ignore-error=true
+      - name: CPU dependency and parsing check
+        if: matrix.variant == 'cpu'
+        run: docker run --rm '${{ steps.image.outputs.tag }}' python /opt/arena/check-install.py --smoke
+      - name: NVIDIA image packaging check (CPU execution, no GPU validation)
+        if: matrix.variant == 'nvidia'
+        run: docker run --rm --entrypoint python -e LOCAL_DEVICE=cpu '${{ steps.image.outputs.tag }}' /opt/arena/check-install.py --smoke
+      - name: Publish
+        if: inputs.publish
+        run: docker push '${{ steps.image.outputs.tag }}'

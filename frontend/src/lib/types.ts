@@ -13,6 +13,8 @@ export type Availability = {
   reason: string | null;
   loaded: boolean | null;
   runtime_label?: string | null;
+  execution_label?: string | null;
+  execution_detail?: string | null;
   max_pages?: number | null;
 };
 
@@ -66,6 +68,12 @@ export type Health = {
   runtime_profile_error?: string | null;
   max_upload_mb: number;
   max_pages_per_experiment: number;
+};
+
+export type JudgingKeyStatus = {
+  llamaparse_configured: boolean;
+  judge_configured: boolean;
+  llamaparse_region: "us" | "eu";
 };
 
 export type DocumentInfo = {

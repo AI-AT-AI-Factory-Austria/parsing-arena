@@ -25,7 +25,12 @@ SOURCE_REV = "a4822e5065a08f1198b9d6b1cffc274626172bd1"
 GGML_REV = "57e2c2ca2a7cae756b1c4dfafa0cdfef9051d234"
 COMPILER_VERSION = "20261104"
 COMPILER_SHA = "552191b5754c49a5a20723276a6fc56541ea1922c4c50b7b669022333fc1b40f"
-ROOT = Path(__file__).resolve().parents[2] / "data" / "runtimes"
+ROOT = Path(
+    os.environ.get(
+        "RUNTIME_DIR",
+        Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[2] / "data")) / "runtimes",
+    )
+)
 
 
 def download_zip(url: str, target: Path, checksum: str | None = None):

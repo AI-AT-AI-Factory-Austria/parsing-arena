@@ -32,7 +32,7 @@ export function BatchView({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmJudging, setConfirmJudging] = useState(false);
+  const [confirmJudging, setConfirmJudging] = useState<"run" | "judge" | null>(null);
   if (!batch) return error ? <div className="card p-8"><h1 className="text-2xl">{error instanceof ApiError && error.status === 404 ? "Batch not found" : "Could not load this batch"}</h1><p className="mt-2 text-muted">{error.message}</p><Link className="btn btn-primary mt-5" href="/arena">Back to the arena</Link></div> : <ExperimentSkeleton />;
 
   const ordered = catalog.data ? [catalog.data.reference, ...sortModelsBySize(catalog.data.models)] : [];
@@ -42,7 +42,7 @@ export function BatchView({ id }: { id: string }) {
   const experiment = source ? { ...source, runs: [...source.runs].sort((a, b) => (order.get(a.model_id) ?? 99) - (order.get(b.model_id) ?? 99)) } : undefined;
   const selected = experiment?.runs.find((r) => r.model_id === modelId) ?? experiment?.runs[0];
   const hasReference = batch.aggregates.some((r) => r.kind === "reference");
-  const canJudge = experiment?.judge_configured && experiment.runs.some((r) => r.kind === "reference" && r.status === "completed") && experiment.runs.some((r) => r.kind !== "reference" && r.status === "completed" && (!r.judgment || r.judgment.status === "failed" || r.judgment.outdated));
+  const canJudge = experiment?.runs.some((r) => r.kind === "reference" && r.status === "completed") && experiment.runs.some((r) => r.kind !== "reference" && r.status === "completed" && (!r.judgment || r.judgment.status === "failed" || r.judgment.outdated));
   const selectDocument = (experimentId: string) => {
     setScope(experimentId);
     setPage(batch.experiments.find((e) => e.id === experimentId)?.pages[0] ?? 1);
@@ -67,14 +67,22 @@ export function BatchView({ id }: { id: string }) {
   };
 
   return <div className="space-y-7">
-    {confirmJudging && <JudgingConfirmation filename={batch.documents.map((d) => d.filename).join(", ")} documentCount={batch.documents.length} pageCount={batch.page_count} onCancel={() => setConfirmJudging(false)} onConfirm={() => { setConfirmJudging(false); void rerun(); }} />}
+    {confirmJudging && <JudgingConfirmation
+      filename={confirmJudging === "judge" && experiment ? experiment.document.filename : batch.documents.map((d) => d.filename).join(", ")}
+      documentCount={confirmJudging === "judge" ? 1 : batch.documents.length}
+      pageCount={confirmJudging === "judge" && experiment ? experiment.pages.length : batch.page_count}
+      mode={confirmJudging}
+      onKeysSaved={() => { catalog.refresh(); refresh(); }}
+      onCancel={() => setConfirmJudging(null)}
+      onConfirm={() => { setConfirmJudging(null); if (confirmJudging === "judge") void judge(); else void rerun(); }}
+    />}
     <header>
       <Link href="/arena" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"><ArrowLeft className="size-4" /> Arena</Link>
       <div className="mt-4 flex flex-wrap items-start justify-between gap-5">
         <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl tracking-tight sm:text-4xl">{batch.documents.length === 1 ? batch.documents[0].filename : "Batch results"}</h1><StatusChip status={batch.status} />{batch.cpu_only && <Chip tone="outline">CPU only</Chip>}</div>
           <p className="mt-2 text-sm text-muted">{pluralize(batch.documents.length, "document")} · {pluralize(batch.page_count, "page")} · {pluralize(batch.model_count, "model")} · {formatDateTime(batch.created_at)}</p></div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn btn-outline btn-sm" disabled={active(batch) || busy !== null} onClick={() => hasReference ? setConfirmJudging(true) : void rerun()}>{busy === "rerun" ? <Spinner /> : <RotateCcw className="size-3.5" />} Run batch again</button>
+          <button type="button" className="btn btn-outline btn-sm" disabled={active(batch) || busy !== null} onClick={() => hasReference ? setConfirmJudging("run") : void rerun()}>{busy === "rerun" ? <Spinner /> : <RotateCcw className="size-3.5" />} Run batch again</button>
           <button type="button" className={clsx("btn btn-sm", confirmDelete ? "bg-danger text-white" : "btn-ghost")} disabled={active(batch) || batch.judging || busy !== null} onClick={() => confirmDelete ? void remove() : setConfirmDelete(true)}><Trash2 className="size-3.5" />{confirmDelete ? "Delete entire batch" : "Delete"}</button>
           {confirmDelete && <button className="btn btn-ghost btn-sm" type="button" onClick={() => setConfirmDelete(false)}>Cancel</button>}
         </div>
@@ -91,7 +99,7 @@ export function BatchView({ id }: { id: string }) {
         <span className="mr-2 text-xs text-muted">Selected pages</span>
         {experiment.pages.map((n) => <button type="button" key={n} aria-pressed={page === n} onClick={() => setPage(n)} className={clsx("flex items-center gap-2 rounded-lg border p-1.5 pr-3 text-xs", page === n ? "border-brand bg-brand-wash text-brand" : "border-line bg-white")}><img src={`${pageImageUrl(experiment.document.id, n)}?thumbnail=true`} alt="" className="h-10 w-8 rounded object-contain" /> Page {n}</button>)}
       </div>
-      <Comparison key={experiment.id} experiment={experiment} models={models} selectedRunId={selected?.id ?? ""} onSelectRun={(id) => setModelId(experiment.runs.find((r) => r.id === id)?.model_id ?? "")} onJudge={canJudge ? () => void judge() : undefined} judgeBusy={busy === "judge"} pageSelection={page} onPageChange={setPage} />
+      <Comparison key={experiment.id} experiment={experiment} models={models} selectedRunId={selected?.id ?? ""} onSelectRun={(id) => setModelId(experiment.runs.find((r) => r.id === id)?.model_id ?? "")} onJudge={canJudge ? () => setConfirmJudging("judge") : undefined} judgeBusy={busy === "judge"} pageSelection={page} onPageChange={setPage} />
       <RunBoard experiment={experiment} models={models} now={now} selectedRunId={selected?.id ?? ""} onSelectRun={(id) => { setModelId(experiment.runs.find((r) => r.id === id)?.model_id ?? ""); document.getElementById("comparison")?.scrollIntoView({ block: "start" }); }} />
     </div>}
   </div>;

@@ -44,6 +44,8 @@ export function ArenaWorkspace() {
 
   // Do not allow a start against the previous mode's catalog while it reloads.
   const data = catalog.data?.cpuOnly === cpuOnly ? catalog.data : undefined;
+  const serverCpuOnly = data?.health.runtime_profile === "cpu";
+  const effectiveCpuOnly = cpuOnly || data?.models.cpu_only === true;
   const maxMb = data?.health.max_upload_mb ?? 100;
   const maxPages = Math.min(MAX_BATCH_PAGES, data?.health.max_pages_per_experiment ?? MAX_BATCH_PAGES);
 
@@ -51,7 +53,7 @@ export function ArenaWorkspace() {
     ? [...data.models.models.filter((m) => m.implemented), data.models.reference]
     : [];
   const selected = choices
-    .filter((m) => m.availability.runnable && (selection ? selection.includes(m.id) : m.kind === "open"))
+    .filter((m) => (m.kind === "reference" || m.availability.runnable) && (selection ? selection.includes(m.id) : m.kind === "open"))
     .map((m) => m.id);
   const reference = data?.models.reference;
   const referenceSelected = reference ? selected.includes(reference.id) : false;
@@ -126,7 +128,7 @@ export function ArenaWorkspace() {
       const batch = await api.createBatch({
         documents: selectedDocuments.map((item) => ({ document_id: item.document.id, pages: item.pages })),
         models: selected,
-        cpu_only: cpuOnly,
+        cpu_only: effectiveCpuOnly,
       });
       router.push(`/batches/${batch.id}`);
     } catch (err) {
@@ -151,6 +153,7 @@ export function ArenaWorkspace() {
           filename={selectedDocuments.map((item) => item.document.filename).join(", ")}
           documentCount={selectedDocuments.length}
           pageCount={pageCount}
+          onKeysSaved={catalog.refresh}
           onCancel={() => setConfirmJudging(false)}
           onConfirm={() => {
             setConfirmJudging(false);
@@ -193,12 +196,12 @@ export function ArenaWorkspace() {
 
         <label className={clsx(
           "mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand",
-          cpuOnly ? "border-brand bg-brand-wash" : "border-line hover:border-ash",
+          effectiveCpuOnly ? "border-brand bg-brand-wash" : "border-line hover:border-ash",
         )}>
           <input
             type="checkbox"
-            checked={cpuOnly}
-            disabled={starting}
+            checked={effectiveCpuOnly}
+            disabled={starting || serverCpuOnly}
             onChange={(event) => {
               setCpuOnly(event.target.checked);
               setStartError(null);
@@ -212,6 +215,7 @@ export function ArenaWorkspace() {
               <Cpu aria-hidden className="size-4" />Use CPU only
             </span>
             <span id="cpu-mode-help" className="mt-1 block text-xs leading-relaxed text-muted">
+              {serverCpuOnly && <>This installation runs on CPU only. </>}
               Runs the selected extraction methods locally without a GPU. Larger models can be much slower.
               Optional API judging is a separate setting below. Saved samples keep their original results.
             </span>
@@ -224,9 +228,7 @@ export function ArenaWorkspace() {
             <label
               className={clsx(
                 "mt-3 flex gap-3 rounded-2xl border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand",
-                !reference.availability.runnable
-                  ? "cursor-not-allowed border-line bg-smoke"
-                  : referenceSelected
+                referenceSelected
                     ? "cursor-pointer border-brand bg-brand-wash"
                     : "cursor-pointer border-line hover:border-ash",
               )}
@@ -234,8 +236,8 @@ export function ArenaWorkspace() {
               <input
                 type="checkbox"
                 className="sr-only"
-                checked={reference.availability.runnable && referenceSelected}
-                disabled={!reference.availability.runnable}
+                checked={referenceSelected}
+                disabled={starting || confirmJudging}
                 onChange={() => toggle(reference.id)}
                 aria-labelledby="reference-name"
                 aria-describedby="reference-details"
@@ -258,14 +260,9 @@ export function ArenaWorkspace() {
                   Uploads each selected document in full to the LlamaParse API to process its selected pages. Mistral receives the extracted
                   text and uses this reference to judge each model.
                 </span>
-                {!reference.availability.runnable && reference.availability.reason && (
+                {(!data.health.llamaparse_configured || !data.health.judge_configured) && (
                   <span className="mt-1.5 block text-xs text-amber">
-                    {reference.availability.reason}
-                  </span>
-                )}
-                {!data.health.judge_configured && (
-                  <span className="mt-1.5 block text-xs text-amber">
-                    Automatic judging is unavailable: Mistral is not configured.
+                    Add the missing API keys when you confirm the run.
                   </span>
                 )}
               </span>
@@ -352,15 +349,15 @@ export function ArenaWorkspace() {
           {pageCount === 0 && <p className="mt-3 text-center text-xs text-faint">Add documents and select at least one page to start.</p>}
           {data && (
             <div className="mt-5 space-y-2 text-xs leading-relaxed text-faint">
-              {(cpuOnly || (runsLocally && data.health.local_device?.available)) && (
+              {(effectiveCpuOnly || (runsLocally && data.health.local_device?.available)) && (
                 <p className="flex gap-2">
                   <Cpu aria-hidden className="mt-px size-3.5 shrink-0" />
                   Local models run on{" "}
-                  {cpuOnly ? "CPU" : data.health.local_device?.device_name ?? data.health.local_device?.device}
+                  {effectiveCpuOnly ? "CPU" : data.health.local_device?.device_name ?? data.health.local_device?.device}
                   , one model at a time so timings stay comparable.
                 </p>
               )}
-              {!cpuOnly && data.health.runtime_profile && data.health.runtime_profile !== "disabled" && (
+              {!effectiveCpuOnly && data.health.runtime_profile && data.health.runtime_profile !== "disabled" && (
                 <p>
                   Runtime profile: {data.health.runtime_profile === "windows-amd"
                     ? "Windows / AMD (ROCm + Vulkan)"
@@ -368,7 +365,7 @@ export function ArenaWorkspace() {
                       ? "Linux / NVIDIA (CUDA)" : "Native"}
                 </p>
               )}
-              {!cpuOnly && data.health.runtime_profile_error && (
+              {!effectiveCpuOnly && data.health.runtime_profile_error && (
                 <p role="alert" className="text-danger">{data.health.runtime_profile_error}</p>
               )}
             </div>
