@@ -1,208 +1,120 @@
-# Parsing Arena
+<div align="center">
+  <img src="frontend/src/app/icon.svg" width="56" height="56" alt="Parsing Arena icon">
+  <h1>Parsing Arena</h1>
+  <p><strong>Find the right parser for your documents.</strong></p>
+  <p>Compare 24 OCR and parsing methods by output quality and speed.<br>Run locally, inspect every page, and keep your results.</p>
+  <p><a href="#run-it-locally">Get started</a> · <a href="#models">Models</a> · <a href="docs/deployment.md">Deployment</a> · <a href="docs/architecture.md">Technical guide</a></p>
+</div>
 
-Evaluate the open-source OCR models that best suit your documents.
+![Original document beside Marker Balanced output, with page-level quality feedback](docs/images/comparison.png)
 
-## Start here
+*Original and extraction side by side, with quality feedback. Example: NVIDIA FY2024 Sustainability Report.*
 
-Choose the installation for the machine that will **run** the models. Everyone else
-can use the app in a browser; they do not need Python, PyTorch or a GPU locally.
+- **A broad selection:** pypdf, tiny OCR networks, Docling, Marker and vision-language models.
+- **Your documents, page by page:** preview PDFs or images and select up to **12 unique pages across multiple documents**.
+- **Compare directly:** switch models, inspect rendered or raw Markdown, view layout boxes and download outputs.
+- **Quality and speed together:** page timings, batch averages, and optional **Excellent / Pass / Fail** assessments with short feedback.
+- **Saved results:** reopen runs and prepared samples without repeating extraction. Local parsing needs no API keys.
 
-| Your machine | Recommended setup | What runs where |
-| --- | --- | --- |
-| Linux or Windows with Docker Desktop, no GPU required | **CPU containers** | All extraction stays on CPU; 19 presets enabled, five slow presets disabled |
-| Linux server with an NVIDIA GPU | **NVIDIA containers** | CUDA/PyTorch plus CUDA llama.cpp; CPU tools stay on CPU |
-| Windows with AMD Radeon 8060S / Ryzen AI Max (`gfx1151`) | **Native Windows setup** | ROCm/PyTorch and Vulkan llama.cpp, matching the tested laptop setup |
+<details>
+<summary><strong>See the batch overview: coverage, timings and saved results</strong></summary>
 
-The containers package the Python environments, Java, Tesseract (English/German),
-Chromium for cross-page tables, Marker, llama.cpp, SkyVision and Unlimited's separate
-patched runtime. You do not install each parser yourself. Dependencies are locked;
-native runtimes use pinned source revisions or checksum-verified releases. Model weights download **on first use**
-and are cached. The first image build and first model run take longer than later starts.
-No API keys are required for local parsing.
+![Saved run overview comparing six local methods on a synthetic report](docs/images/batch-overview.png)
 
-### CPU containers — one command
+*Every page counts equally in the batch overview. These are example runs; timings and assessments depend on the document, preset and hardware.*
 
-Install [Docker with Compose](https://docs.docker.com/compose/install/), clone this repo,
-and run from its root:
+</details>
+
+## Run it locally
+
+### CPU containers — the easiest start
+
+Install [Docker with Compose](https://docs.docker.com/compose/install/), then:
 
 ```bash
+git clone https://github.com/yannikgaebel/ocr-arena.git
+cd ocr-arena
 docker compose up --build -d
 ```
 
-Open **http://localhost:3000**. There is no `.env` setup step. The CPU image enforces
-CPU execution and the checkbox reflects that. Infinity-Parser2-Flash, Aeddix, GLM-OCR,
-florin and docTR Large remain disabled in this mode because of their long processing times.
+Open **http://localhost:3000**. Upload a document, select pages and methods, and start the run.
 
-The provided images target **Linux x86-64 with AVX2**. On Windows use Docker Desktop's
-Linux-container/WSL2 backend. ARM/Apple Silicon images are not provided. Allocate adequate
-resources to Docker: 8 CPU threads and 32 GB RAM are a practical starting point for
-trying the larger models, with 50+ GB free disk for builds and model caches. These are
-planning estimates, not a guarantee for every document; start with one page and small models.
+**No Python setup or API keys required.** The images include the parser environments,
+Java, Tesseract and native inference tools. **19 methods are enabled in CPU mode**;
+five especially slow presets are disabled.
+
+The images target **Linux x86-64 / AVX2**, including Docker Desktop's Linux/WSL2 backend
+on Windows. ARM/Apple Silicon images are not provided. For larger models, plan for
+**8 CPU threads, 32 GB RAM and 50+ GB free disk**; needs vary by workload.
+The first build takes time, and weights download on first use. Larger models can take
+minutes per page on CPU, so start with one page and a few methods. Documents, results
+and model caches persist in Docker volumes.
 
 ```bash
-docker compose logs -f                      # Startup and processing logs
-docker compose stop                        # Stop; keep documents, keys and cached models
-docker compose up -d                       # Start again; no rebuild or redownload
-docker compose exec backend python /opt/arena/check-install.py --smoke
+docker compose stop                        # Stop; keep saved data
+docker compose up -d                       # Start again
+docker compose logs -f                     # View logs
 ```
 
-The check verifies dependencies, model availability, browser rendering and a bundled-page
-pypdf extraction without calling document-processing APIs. CPU inference can still take
-minutes per page for larger models.
+<details>
+<summary><strong>Linux with an NVIDIA GPU</strong></summary>
 
-### NVIDIA containers — Linux GPU server
-
-Install the host's NVIDIA driver and the
-[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
-Then use the GPU override:
+Install a compatible NVIDIA driver and the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html),
+then run from the repo root:
 
 ```bash
 docker compose -f compose.yaml -f compose.nvidia.yaml up --build -d
 docker compose -f compose.yaml -f compose.nvidia.yaml exec backend python /opt/arena/check-install.py --smoke
 ```
 
-Use both files for subsequent `up`, `stop` and `logs` commands too. The image includes
-CUDA 12.8 and PyTorch 2.11.0; the host needs a compatible NVIDIA driver. It reserves one
-GPU and fails with a clear message if GPU access is missing. The check also executes
-CUDA and Triton/FlexAttention kernels. This variant must be validated on the deployment
-GPU; a successful CPU-container check does not validate NVIDIA inference.
+Use both Compose files for subsequent commands. This image uses CUDA 12.8 and
+PyTorch 2.11.0; GPU compatibility and memory determine which workloads fit.
+Its first build can take an hour or more and needs additional disk space.
+The image builds and passes packaging checks; **actual NVIDIA inference still needs
+validation on the target GPU**. See the [deployment guide](docs/deployment.md).
 
-The CUDA image uses the official, checksum-verified llama.cpp release and compiles
-Unlimited-OCR's separate patched runtime. That first build can still take an hour or
-more on a modest build machine. Builders with spare CPU/RAM can increase parallelism
-using `docker compose -f compose.yaml -f compose.nvidia.yaml build --build-arg NATIVE_BUILD_JOBS=8 backend`.
-For a team rollout, build and publish once, then use the pull-only instructions below.
-Allow more disk space for the CUDA toolchain and build cache than for the CPU image.
+</details>
 
-The native CUDA paths make all 24 presets eligible, subject to GPU compatibility and
-available memory. Model weights, page complexity and multi-page context affect memory
-usage; a 24 GB GPU is a sensible starting point, not a promise that every workload fits.
-The same app can still run an individual batch in CPU-only mode.
+<details>
+<summary><strong>Windows / AMD — native GPU setup</strong></summary>
 
-### Windows / AMD — native installation
+For **Radeon 8060S / Ryzen AI Max (`gfx1151`)**, the native setup uses ROCm and Vulkan.
+The CPU Docker image does not accelerate models on an AMD GPU.
 
-For the Radeon 8060S, use the native ROCm/Vulkan environment. Docker Desktop's documented
-[GPU passthrough](https://docs.docker.com/desktop/features/gpu/) is for NVIDIA; the CPU
-container does not accelerate these models on an AMD GPU.
-
-Install **signed Python 3.13** from [python.org](https://www.python.org/downloads/windows/)
-with the `py` launcher, **Node.js 22 LTS**, [uv](https://docs.astral.sh/uv/getting-started/installation/),
-and the AMD driver compatible with the `gfx1151` ROCm wheel set. Then run in PowerShell:
+Install signed **Python 3.13** with the `py` launcher, **Node.js 22 LTS**,
+[uv](https://docs.astral.sh/uv/getting-started/installation/), and the compatible AMD driver:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1 -Profile windows-amd
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-windows.ps1
 ```
 
-Setup creates the main Python environment and Marker's separate CPU environment, installs
-the pinned runtimes and Chromium, installs Tesseract through `winget` if needed, and builds
-the frontend. It records the selected profile in `data/installation.json` and preserves
-an existing `.env`. Tesseract's installer may request elevation. Use `-CheckOnly` to check
-prerequisites without installing anything. Other AMD GPU families require their own
-compatible PyTorch/driver setup; the supplied AMD preset is specifically for `gfx1151`.
-The command-scoped execution policy allows these repository scripts to run without
-changing the machine's permanent PowerShell policy.
+The installer prepares both Python environments and the frontend. Other AMD GPU
+families require their own compatible driver/PyTorch setup.
+[Prerequisites, logs and troubleshooting →](docs/deployment.md#windows--amd)
 
-`start-windows.ps1` launches hidden backend/frontend processes and prints their PIDs;
-logs are under `data/logs/`. It refuses to start a duplicate on occupied ports. Restart
-with the same command after stopping the previous processes. Stop each process tree with
-`taskkill /PID <PID> /T /F`, using the printed PIDs, after active runs finish. For a native CPU installation,
-run setup with `-Profile cpu` instead. Stop a running app before rebuilding its environments.
+</details>
 
-### Storage, API keys and shared deployments
+### Optional automatic judging
 
-The container setup uses two services: a production Next.js **frontend** and a FastAPI
-**backend** containing the sequential extraction worker and concurrent quality checks.
-Only frontend port 3000 is exposed, on localhost by default; API calls pass through it.
-Backend runtimes live in the image, while named Docker volumes preserve:
+Enable **LlamaParse Agentic Plus** in Run settings. The confirmation dialog lets you
+enter and save missing **LlamaParse and Mistral API keys**, then asks you to type **OK**
+before proceeding. Judging is off by default and uses the providers' API credits.
 
-- **`arena-data`**: uploaded documents, results, SQLite and UI-saved API keys.
-- **`model-cache`**: downloaded weights and parser caches, reused after restarts/upgrades.
+**LlamaParse receives the full uploaded document** to process the selected pages;
+**Mistral receives the extracted reference and model text**. Only enable this when
+you may share that content. The CPU switch does not change these external transfers.
+Assessments are relative to the reference, which can also contain errors.
 
-Deleting these volumes deletes that data. `docker compose down` keeps them; `down -v`
-does not. Container data is separate from a native checkout's `data/` folder. The saved-sample
-gallery starts empty: copy only the intended sample files into `/data/sample-docs` and
-prepare their results using the sample-gallery instructions below. No personal samples or `.env` files
-are baked into either image or sent in its build context.
+**Shared server or Kubernetes?** See [deployment, persistent storage and access control](docs/deployment.md).
+**Want samples?** [Prepare a saved sample gallery](docs/architecture.md#saved-sample-gallery);
+new installations start with an empty gallery.
 
-Enable optional judging and click Start to enter missing LlamaParse/Mistral keys in the
-confirmation dialog. Keys are saved server-side for this installation; entering **OK**
-is still required before external processing. Docker does not automatically pass the
-repo's private `.env` keys into containers. Operators can supply environment variables or
-Kubernetes Secrets explicitly instead. Keep shared access behind authentication and TLS:
-the app currently has shared storage/credentials, not separate user accounts.
+## Models
 
-Set `ARENA_PORT` to change the host port. For a shared URL set `ARENA_BIND` and
-`CORS_ORIGINS` (a JSON list of allowed frontend origins) explicitly, for example in a
-separate deployment env file. Keep it behind your authenticated reverse proxy.
-Custom ports also need matching origins for the API-key dialog.
-
-For Kubernetes, use these same two images. Name the backend Service `backend` on port
-8000, or build the frontend with `--build-arg BACKEND_URL=http://your-service:8000`.
-The proxy destination is fixed at frontend build time; its server-side `BACKEND_URL`
-must agree. Keep **one backend replica / one Uvicorn worker** with the current SQLite and
-in-process queue; use persistent volumes for `/data` and `/cache` (writable by UID/GID
-10001), and request one `nvidia.com/gpu` for the NVIDIA image. Put ingress/authentication
-in front of the frontend. Stopping containers releases processes; it does not stop billing
-for a GPU VM. GPU provisioning/shutdown automation is separate from this packaging.
-
-### Build once, distribute images
-
-The commands above build locally; there is **no published image required**. Maintainers
-can manually run **Actions → Build container images**, choose CPU, NVIDIA or both
-(the frontend is always included), and opt in to publishing to their repo's GitHub Container Registry. The
-CPU image is smoke-tested before publication; NVIDIA needs the GPU check above on a
-real deployment host. Set package visibility/access deliberately before distributing it.
-
-Once images are published, users can skip compilation by setting
-`ARENA_FRONTEND_IMAGE=ghcr.io/OWNER/REPO/frontend:latest` and
-`ARENA_BACKEND_IMAGE=ghcr.io/OWNER/REPO/backend:cpu` (or `:nvidia`) in a deployment env file:
-
-```bash
-docker compose --env-file deployment.env pull
-docker compose --env-file deployment.env up -d --no-build
-```
-
-Add `-f compose.yaml -f compose.nvidia.yaml` for NVIDIA. For controlled releases, distribute
-immutable image digests instead of moving tags. No workflow runs or image publication are
-triggered by installing or starting the app.
-
-### Reading the runtime labels
-
-**Local CPU**, **Local AMD GPU · ROCm**, **Local AMD GPU · Vulkan**, and
-**Local NVIDIA GPU · CUDA** describe the machine hosting Parsing Arena. **Remote model
-server** means a configured inference endpoint; **Hosted API** means LlamaParse. PyTorch
-is the inference framework and ROCm/CUDA its GPU runtime; Vulkan is used by llama.cpp.
-GGUF and F16/BF16 describe weight format/precision, so they appear in runtime tooltips
-instead of being mixed into the hardware label. Marker Balanced's tooltip explains its
-GPU OCR plus CPU auxiliary models.
-
-## Models and comparison
-
-Drop in PDFs or images and select up to 12 unique pages across them. Parsing Arena parses
-the batch with open OCR models of different sizes, times
-every run, and shows each model's output next to the original page and next to
-**LlamaParse Agentic Plus** as an optional reference. The selection lists 24 implemented
-methods, grouped roughly from larger models to compact pipelines and lightweight tools.
-Each method highlights its strengths and use cases based on its model card and the preset implemented here.
-Parameter counts and licenses come from the official model cards and project documentation.
-
-The upload area shows each document's pages as selectable thumbnails, with a larger
-preview on click. Add documents incrementally or choose several files at once. Repeated
-uploads of identical files are detected, and the server deduplicates selections by file
-content and page number. The 12-page limit applies to the whole batch.
-
-Results open on **Batch overview**, with a page-weighted average parsing time, total time,
-extraction coverage, and Excellent/Pass/Fail counts for each model. Pass rate includes
-Excellent and Pass among pages with a current judgment; missing checks are excluded and
-coverage is shown. Choose a document tab to inspect its pages and model outputs.
-Documents stay separate for multi-page parsing, table reconstruction and judging.
-Saved batches appear once in history and can be reopened, rerun or deleted together.
-Single-document saved results and sample comparisons remain available.
-
-Optional judging asks for confirmation covering every included document. LlamaParse
-receives those documents in full to process their selected pages; Mistral receives
-the extracted texts. The CPU checkbox applies to every extraction in the batch.
+**24 local methods + one optional hosted reference**, roughly ordered by size.
+The app shows each method's strengths and its actual execution hardware.
 
 | Model | Approximate size | Strengths & use cases | License |
 | --- | --- | --- | --- |
@@ -229,690 +141,40 @@ the extracted texts. The CPU checkbox applies to every extraction in the batch.
 | docTR compact | ≈6.3M | Text detection & recognition with low compute needs | Apache-2.0 |
 | PaddleOCR Tiny | 1.5M | Tiny multilingual text OCR | Apache-2.0 |
 | pypdf | No model | Embedded PDF text; no OCR | BSD-3-Clause |
-| Tesseract¹ | Classic OCR (LSTM) | Clean scans of printed text | Apache-2.0 |
+| Tesseract | Classic OCR (LSTM) | Clean scans of printed text | Apache-2.0 |
 | OpenDataLoader Core | No neural model | Digital PDF structure; no OCR | Apache-2.0 |
 
-Pipeline sizes are approximate and may exclude auxiliary models. OpenDataLoader Docling
-is listed beside Docling Standard because its total depends on the backend configuration.
-These specialties describe useful applications, not a quality ranking.
+Sizes are approximate; pipelines may include auxiliary models. Strengths describe
+use cases, not a ranking. Code and model weights can have different licenses.
 
-¹ Needs the Tesseract program (Windows: `winget install UB-Mannheim.TesseractOCR`).
+CPU mode disables **Infinity-Parser2-Flash, Aeddix Alpine OCR, GLM-OCR,
+florin-parser-nano and docTR Large transformer** because of long processing times.
 
-Nemotron-3.5-Parse and Falcon-OCR have been removed from the active catalog. Saved
-results retain their model names. Nemotron SkyVision CPU remains available.
-
-The table below describes each local pipeline. Some implementations derive from
-[ParseBench](https://github.com/run-llama/ParseBench); local settings are documented below.
-
-| Model | Pipeline | Pages rendered at |
-| --- | --- | --- |
-| rakedoc-nano, Aeddix Alpine OCR, florin-parser-nano | KDL two-stage pipeline (layout, then region recognition); Florin markdown emission for rakedoc and florin | 144 DPI |
-| Nemotron SkyVision CPU | SkyVision.cpp single full-page pass, F16 GGUF; NVIDIA text normalization to Markdown, HTML tables and layout boxes | 150 DPI, PNG |
-| LightOnOCR-3-0.8B | One pass with the `grounding` prompt | 400 DPI, at most 5 MP |
-| MinerU2.5-Pro-2605 | `mineru-vl-utils` two-step extraction with image analysis | 150 DPI |
-| Infinity-Parser2-Flash | `doc2json`, then each figure re-read as a markdown table | 300 DPI |
-| OvisOCR3 | Structured pages, chart reading, then recursive cross-page table reconstruction | 200 DPI |
-| Docling Standard | Docling's default PDF pipeline on the CPU (ParseBench used a private Docling server, so its settings may differ) | original file |
-| Granite Docling 258M | Docling VLM pipeline with the pinned IBM checkpoint; greedy DocTags generation, then Markdown and layout export | original file, Docling scale 2 (144 DPI for PDF) |
-| pypdf | `page.extract_text()`, no OCR | original file |
-| Tesseract | `pytesseract.image_to_string`, English (`TESSERACT_LANG`) | 300 DPI |
-| PaddleOCR Tiny / Small / Medium | PP-OCRv6 matching detector + recognizer, official Transformers exports; text lines and boxes | 200 DPI |
-| GLM-OCR 0.9B | Full-page `Text Recognition:` prompt, greedy Transformers inference, up to 8192 output tokens | 200 DPI |
-| Unlimited-OCR 2 | All selected pages in one request, 1024px global views, DASH routing + page-relative RoPE; BF16 decoder / F16 vision | 144 DPI |
-
-Post-processing code from ParseBench (Apache-2.0) is vendored in `backend/app/engines/vendor` and
-`backend/app/engines/kdl`.
-
-**OvisOCR3 cross-page tables** are enabled by default. After page parsing, the same model
-checks adjacent selected pages containing tables, working backwards through multi-page
-chains. Modified pages are re-rendered before the next merge, following the
-[pinned upstream workflow](https://huggingface.co/ATH-MaaS/OvisOCR3/blob/17f255e2c8ae6d18d5d5edb0a474bd4ed39aef90/document_crosspage.py)
-(Apache-2.0; vendored with explicit UTF-8 text I/O for Windows).
-Whole-document view and Markdown downloads contain joined tables. Individual page
-outputs, layout boxes and page-level judging retain the original extraction, with
-collapsible joined-table previews and source-page numbers. The total parsing time includes
-reconstruction; individual page timings cover page extraction only. Saved runs are not
-reprocessed automatically; start a new Ovis run to use this feature.
-
-The conservative upstream binding joins the last table on the earlier page with the first
-table on the next page. Skipped page numbers, incomplete page JSON and chart-derived data
-tables are excluded. Ambiguous multiple merges at one boundary and malformed responses
-are retained as diagnostics instead of overwriting page OCR. Failures in this optional
-stage leave completed page extractions available and appear in the results panel.
-
-For chains of three or more pages, install the browser after installing backend dependencies:
-`backend/.venv/Scripts/python.exe -m playwright install chromium` on Windows, or
-`backend/.venv/bin/python -m playwright install --with-deps chromium` on Linux.
-An installed Windows Chrome is also detected; `OVISOCR3_BROWSER_EXECUTABLE` can specify
-another Chromium executable. The pinned local MathJax renderer is downloaded from the
-model repository on first use; document rendering blocks network requests. Remote vLLM
-servers need to accept two images per request (`--limit-mm-per-prompt '{"image":2}'`).
-Set `OVISOCR3_CROSSPAGE_TABLES=false` to reproduce the original page-only pipeline.
-
-**Docling Standard** retains the existing `docling` model ID, so saved experiments still work.
-**Granite Docling 258M** (`granite-docling-258m`) uses the separate VLM pipeline and reads page
-images without substituting the embedded PDF text. It follows `LOCAL_DEVICE` and `LOCAL_DTYPE`,
-uses Transformers without quantization or FlashAttention 2, and generates up to 8192 tokens per
-page at temperature 0. Selected pages are processed individually, with their own timing and
-progress. Incomplete or truncated generations are reported as page failures. The first run
-downloads the [IBM model](https://huggingface.co/ibm-granite/granite-docling-258M); the existing
-model cache limit also applies to this pipeline.
-
-Both Docling presets export recognized headers, footers and text inside picture regions.
-Image classification metadata (such as "Logo" or "Other") is excluded from the page text;
-actual recognized text and captions are retained.
-
-**PaddleOCR Tiny / Small / Medium** use the
-[PP-OCRv6 family](https://huggingface.co/blog/PaddlePaddle/pp-ocrv6), with stable IDs
-`paddleocr_tiny`, `paddleocr_small` and `paddleocr_medium`. The published sizes include
-the detector and recognizer together; Medium is 34.5M (approximately 35M). All six
-official safetensors checkpoints are pinned in `backend/app/engines/paddle.py`.
-They run in float32 through Transformers on the device selected by `LOCAL_DEVICE`,
-including AMD ROCm and NVIDIA CUDA. On Windows/ROCm the same selective BatchNorm
-GPU dispatch workaround as docTR avoids unsupported MIOpen kernels. Medium's eight
-9x9 detector convolutions use PyTorch's native GPU implementation to avoid MIOpen
-kernel-selection stalls; their weights and float32 precision remain unchanged.
-
-Detection uses the checkpoint's preprocessing (minimum side 736, maximum side 4000),
-threshold 0.3, box threshold 0.6 and unclip ratio 1.5. Text quadrilaterals are rectified
-and recognized in batches of eight; accepted lines have confidence at least 0.5.
-Raw line polygons and confidence scores are saved with each page. Orientation
-classification, document unwarping and table/layout recognition models are disabled,
-so the displayed sizes do not hide additional networks. Outputs contain text and
-line boxes; tables are not reconstructed. Tiny supports 49 languages; Small and
-Medium support 50, including Japanese. PDFs are rasterized, including those with
-embedded text, and image uploads use the original image.
-
-**GLM-OCR 0.9B** (`glm-ocr`) uses the pinned
-[Z.ai checkpoint](https://huggingface.co/zai-org/GLM-OCR) and its official Transformers
-processor. This option runs the model directly on the full page, without the SDK's
-additional PP-DocLayoutV3 detector. It therefore returns text/Markdown without layout
-boxes, and SDK benchmark scores are not assigned to this option. It follows
-`LOCAL_DEVICE` and `LOCAL_DTYPE`, uses SDPA attention and greedy generation, and marks
-an output stopped by the 8192-token limit as incomplete. These four options require
-the local dependencies (`uv sync --extra local --inexact`) and the hardware-specific
-PyTorch installation. Their checkpoints are downloaded once and cached locally;
-documents are not sent to an external OCR service.
-GLM's vision patch embedding and 2x2 merger use equivalent matrix multiplications
-with the original weights and precision to avoid slow AMD convolution kernel selection.
-Its pipe tables are converted to HTML so irregular header widths cannot cause the
-Markdown viewer to discard extracted cells. Raw model text is kept in `glm-page-N.md`.
+These are defined presets. Frameworks such as Docling and Marker support further
+tuning; results describe the configurations used here.
+[Exact configurations, outputs and limitations →](docs/model-presets.md)
 
 ## How it works
 
-- **Backend** (`backend/`): FastAPI, SQLite and a single background worker. Open models run
-  **one after another** on the same hardware so their timings are comparable. Model loading is
-  measured separately and is not counted as parse time. LlamaParse runs in parallel through the
-  official `llama-cloud` SDK, with ParseBench's settings (`tier=agentic_plus`, `version=latest`,
-  `disable_cache=true`). Its time is the API turnaround.
-- **Frontend** (`frontend/`): Next.js 16 app with a landing page and model table, an arena for
-  uploading documents and starting runs, and a results page with live progress, seconds per page,
-  side-by-side outputs (rendered or raw Markdown), and the detected layout drawn on the page.
-- Uploads, page renders, outputs and the database live in `data/` (gitignored).
-
-## Saved sample documents
-
-Place PDF, PNG, JPEG, WebP or TIFF files in `data/sample-docs/` (under `DATA_DIR` if
-overridden). The arena discovers them and shows thumbnails below the upload area.
-Sample cards open their saved comparisons directly; **Use a sample report** chooses a
-random saved sample. Neither action runs OCR, sends documents to an API, or uses credits.
-The model and page selections on the upload form only apply to new uploads.
-
-With the API running, prepare the gallery once from `backend/`:
-
-```bash
-uv run python scripts/prepare_samples.py --include-reference
+```mermaid
+flowchart LR
+    UI["Browser · Next.js"] --> API["FastAPI backend"]
+    API --> OCR["Local parsing worker"]
+    API --> Store["SQLite + document files"]
+    OCR --> Store
+    API -. "Optional judging" .-> Cloud["LlamaParse + Mistral APIs"]
 ```
 
-This runs all available open models plus LlamaParse and, when configured, Mistral judging.
-The reference option uploads the samples to LlamaParse and sends extracted text to Mistral;
-omit `--include-reference` for open-model results only. Use `--models pypdf docling` to
-choose specific open models. Preparation returns immediately; progress appears on the
-results pages. Repeating the command reuses the saved or already queued comparisons.
-Only `--refresh` explicitly creates replacement runs.
-
-The sample index, model outputs and judgments persist in SQLite alongside the originals
-and previews in `data/`. Keep this directory when restarting or moving the app. Files are
-identified by their SHA-256 content: changing a file requires preparing its new version;
-renaming it retains its results. Removing a source file hides its card without deleting
-past experiments. Newly added files appear as unprepared until the command is run again.
-
-## Setup
-
-You need [uv](https://docs.astral.sh/uv/) and Node.js 20 or later. A GPU is optional but strongly
-recommended. On an AMD Radeon 8060S a page takes roughly 10–60 s per model; on a CPU it takes
-minutes. A full arena run therefore takes several minutes per page, and the vLLM setup below is
-much faster.
-
-### Unlimited-OCR 2: local multi-page parsing
-
-`unlimited-ocr-2` now processes **all selected pages together**, in one request.
-It uses the [community v2 GGUF runtime](https://huggingface.co/RX5950XT/Unlimited-OCR-2-GGUF),
-pinned to revision `1e3e5f3e82435578cd1e3c191673e1444b617f52`, with a **BF16 decoder and
-F16 vision encoder** (about 6.7 GB of weights). This retains the 3.3B parameter model;
-it is not a 4/8-bit quantization. The original checkpoint is pinned to
-`0480966938291445591f69f08a13b041c073a96a`.
-
-Detected title blocks retain their supplied heading level in Markdown, defaulting to H1
-when the model provides no level, as in the upstream Unlimited-OCR converter.
-
-Install the dedicated runtime and optionally cache its weights:
-
-```powershell
-uv run --no-project --script backend/scripts/install-unlimited.py --download-model
-```
-
-On Windows the installer verifies checksums for the official llama.cpp **b11913**
-Vulkan package and the author's patched DLLs. On Linux it builds the same patch for
-CUDA; that path requires a C++ compiler and CUDA Toolkit and has not been tested on
-this Windows machine. Files live in `data/runtimes/unlimited-ocr2`, separately from
-the other models' llama.cpp installation. Restart the backend after installation.
-
-This implementation preserves **DASH routing and page-relative RoPE**, but computes
-masked dense attention. **It does not provide the paper's optimized sparse-memory
-scaling**: longer documents still consume more memory. It is intended to evaluate
-the model's multi-page extraction on the available hardware, not to benchmark unlimited
-document length. The catalog's ParseBench score is the published model score, not a
-new measurement of this runtime.
-
-Defaults: 16 selected pages, a 32,768-token context, up to 24,000 output tokens,
-greedy decoding and a 1024px global view per page (273 visual tokens, no tiles).
-`UNLIMITED_OCR_2_MAX_PAGES`, `UNLIMITED_OCR_2_CONTEXT_LENGTH`, and
-`UNLIMITED_OCR_2_MAX_TOKENS` can be configured in `.env`. The output budget is reduced
-when necessary to fit the input. Context shifting and prompt caching are disabled
-to preserve page positions between requests. Table special tokens are retained.
-
-The app validates page-marker counts, saves the raw stream as `unlimited-raw.txt`,
-and maps blocks, headings, tables and normalized layout boxes onto the original
-page numbers. Token exhaustion or invalid page boundaries fail the run instead of
-silently accepting a partial document. Results show **total document time**;
-seconds/page in the overview is an average, not an independently measured page time.
-
-Tested on the **AMD Radeon 8060S using Vulkan**: the bundled two-page report
-completed in 19.1 seconds, a distinct four-page synthetic document in 17.6 seconds,
-and a subsequent pages-2-and-4 selection in 7.7 seconds using the loaded model.
-These are functional smoke tests, not long-document scaling or accuracy benchmarks.
-No external document-processing API is used.
-
-### Runtime profiles
-
-Set **`RUNTIME_PROFILE=auto`** in the repo `.env` (the default), or choose explicitly:
-
-- **`windows-amd`**: LightOnOCR-3, Infinity-Parser2-Flash and OvisOCR3 use local
-  **llama.cpp / Vulkan with F16 GGUF weights and F16 vision projectors**. The other GPU
-  models retain their existing ROCm implementations. Both inference paths use the AMD GPU.
-- **`linux-nvidia`**: GPU models use their Transformers/CUDA implementations;
-  Unlimited-OCR 2 uses its separately installed CUDA runtime.
-
-An explicit profile is checked against the actual OS and GPU runtime; it cannot enable
-CUDA on an AMD machine. Restart the backend after changing `.env`. Configured model
-endpoints take precedence and remain usable from either platform, except in CPU-only mode.
-`LOCAL_DEVICE=cpu` forces CPU-only mode for the entire server.
-
-The Windows profile uses the pinned Vulkan llama.cpp build installed by
-`backend/.venv/Scripts/python.exe backend/scripts/install-preset-tools.py`.
-`LLAMA_CPP_BINARY` can point to another compatible Vulkan `llama-server` executable.
-First use downloads community format conversions from
-[LightOnOCR-3](https://huggingface.co/mradermacher/LightOnOCR-3-0.8B-GGUF),
-[OvisOCR3](https://huggingface.co/mradermacher/OvisOCR3-GGUF), and
-[Infinity-Parser2-Flash](https://huggingface.co/prithivMLmods/Infinity-Parser2-Flash-GGUF).
-Exact revisions and filenames are pinned in `backend/app/engines/backends/llama_cpp.py`.
-These use full 16-bit weights, not 4/8-bit quantization. Their conversion revision and
-runtime are recorded with every run. Rendering, prompts, crop passes and normalization
-stay in the existing engines; outputs can still differ from native inference, and the
-leaderboard scores are not new measurements of the Vulkan versions.
-
-Model selection shows **AMD Vulkan · F16 GGUF** for these variants. Local model servers
-bind only to `127.0.0.1`, share the existing model cache limit, and stop on unload/shutdown.
-Documents stay local. Logs are in `data/runtime-logs/*-vulkan.log`.
-
-The three Vulkan pipelines completed an end-to-end test on a Radeon 8060S / Windows
-using page 1 of the bundled synthetic report. **Nemotron SkyVision CPU** runs locally
-on the CPU and is described below.
-
-### CPU-only runs
-
-Check **Use CPU only** at the top of **Run settings** before starting a new run.
-The app checks availability for that mode, ignores configured remote model endpoints,
-and runs extraction locally without GPU offloading. Uncheck it to return to the normal
-hardware settings. The mode is saved with the experiment, shown on the results page,
-and preserved by **Run again**. Opening a saved sample still opens its original cached results.
-
-CPU runs use one model at a time and release it afterwards. Native vision-language models
-use BF16 on CPUs with native BF16 instructions and oneDNN support, otherwise float32.
-Set `CPU_DTYPE=float32` to force float32. DocTR, PaddleOCR and Docling retain their own
-pipeline precision settings. LightOnOCR, OvisOCR3 and Infinity use their existing full-precision GGUF
-weights on CPU when llama.cpp is installed, with native Transformers as a fallback.
-Marker Balanced and Unlimited-OCR 2 also disable decoder, vision, KV-cache and auxiliary
-GPU offloading. Their normal rendering, prompts and output limits are retained.
-On Windows with a ROCm PyTorch build, native PyTorch BF16 vision-language models use
-Transformers' eager attention to avoid a slow CPU SDPA kernel; this needs more RAM
-than fused attention. GPU runs keep their original attention implementation.
-
-Larger models can take minutes per page and need several GB of free RAM; start with one
-page and a few methods. `CPU_THREADS=8` controls llama.cpp and the runner's default PyTorch
-thread count; individual libraries may apply their own thread limits. This switch does
-not install missing packages or weights, and `LOCAL_INFERENCE=false` still disables
-dependent local models. Initial model downloads still require internet access.
-
-Infinity-Parser2-Flash, Aeddix Alpine OCR, GLM-OCR, florin-parser-nano and docTR Large
-transformer are disabled in CPU mode due to long processing times. Their availability
-in GPU mode is unchanged.
-
-Optional **LlamaParse/Mistral judging remains an external API operation**, controlled by
-its separate checkbox and confirmation. It is not made local by the CPU setting.
-
-The same mode is available through `POST /api/experiments` with `"cpu_only": true`,
-`GET /api/models?cpu_only=true`, or the CLI:
-
-```powershell
-backend/.venv/Scripts/python.exe backend/scripts/smoke_model.py backend/samples/sample-report.pdf --model docling --pages 1 --cpu-only
-```
-
-On a Linux machine without CUDA, install the dedicated Unlimited runtime with
-`uv run --no-project --script backend/scripts/install-unlimited.py --cpu --download-model`.
-This builds the pinned patched source with CUDA disabled; a C++ toolchain is still required.
-The Linux build path has not been tested on this Windows machine.
-
-Validated on 17 November 2026 on a Ryzen AI MAX+ 395: all **24 local methods**
-completed CPU-only extraction of a simple synthetic PDF, including two pages together
-for Unlimited-OCR 2. Each output contained the test invoice number. The UI was also
-checked with the AMD GPU available, verifying CPU execution and saved run metadata.
-These are functional smoke tests, not document-accuracy or performance benchmarks.
-
-Infinity-Parser2-Flash, Aeddix Alpine OCR and GLM OCR are currently disabled in CPU
-mode after taking 13:30, 8:55 and 7:18 respectively on a subsequent single-page run.
-They remain available in GPU mode. The CPU selection shows the reason; new CPU runs
-and reruns cannot include these models. Previously saved results remain viewable.
-
-### Nemotron SkyVision CPU
-
-The separate `nemotron-skyvision-cpu` option runs
-[SkyContact's Nemotron F16 conversion](https://huggingface.co/SkyContact/Nemotron-3.5-Parse-GGUF)
-with [SkyVision.cpp](https://github.com/SkYContact/SkyVision.cpp). It has about **631 million
-parameters and a 1.31 GB weight file**. It uses CPU inference on both hardware profiles.
-No ParseBench score is assigned to this different pipeline.
-
-From the repo root, build the runtime once:
-
-```bash
-uv run --no-project --script backend/scripts/install-skyvision.py
-```
-
-The installer pins SkyVision and ggml commits and builds a static AVX2/FMA/F16C CPU
-executable under `data/runtimes/skyvision`. On Windows x64 it downloads a checksum-verified
-portable LLVM/MinGW compiler; Linux requires an installed C/C++ compiler. CMake and Ninja
-run in an isolated uv environment. System tools and the app's PyTorch are unchanged.
-The build includes small portability fixes and rejects truncated generations as errors.
-
-Restart the API after installation. The first run downloads the pinned F16 checkpoint,
-tokenizer and NVIDIA's text-only post-processing helpers. Set `SKYVISION_BINARY` to use
-an installation in another location (keep its
-`build-info.json` next to the executable), `SKYVISION_THREADS` to override the default
-physical-core count, or `SKYVISION_TIMEOUT_S` to adjust the 20-minute per-request timeout.
-
-One local worker keeps the model loaded under the existing cache limit and communicates
-over stdin/stdout; no network server or external document upload is involved. The parser
-uses its native image-resolution policy, greedy decoding, 8,744 output tokens, and a
-24,576-token context. Each page exports Markdown and layout boxes, with raw structured
-output saved beside the run artifacts. NVIDIA's pinned `postprocess_document` helper
-formats the raw token stream: it preserves merged headers that the current SkyVision
-table converter drops. This step loads no neural model and uses no GPU; both the raw
-output and the normalizer revision are recorded. Runtime logs are in
-`data/runtime-logs/nemotron-skyvision-cpu.log`.
-
-### Deploying on Linux / NVIDIA
-
-On the target host, install the NVIDIA driver, Python 3.12, `uv`, and a C compiler
-(`sudo apt-get install build-essential` on Ubuntu). Then, from the repo root:
-
-```bash
-bash scripts/install-linux-nvidia.sh
-```
-
-This installs the locked local dependencies plus PyTorch 2.11.0 / torchvision 0.26.0
-from the official CUDA 12.8 wheel index, and compiles/runs a real FlexAttention kernel.
-It does not change `.env`, API keys, or saved data. Set `RUNTIME_PROFILE=linux-nvidia`
-in `.env`, then verify the five affected models and start the API:
-
-```bash
-cd backend
-.venv/bin/python scripts/verify-runtime.py --smoke
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-The smoke test runs one bundled synthetic page per model and saves outputs and runtime
-metadata under `data/runtime-checks/`. It downloads missing weights but does not process
-gallery documents or use LlamaParse/Mistral/remote endpoints. Without `--smoke`, it only
-checks configuration. On Windows, select the compatible models explicitly:
-
-```powershell
-backend/.venv/Scripts/python.exe backend/scripts/verify-runtime.py --smoke --models lightonocr-3-0.8b infinity-parser2-flash ovisocr3
-```
-
-The Linux/NVIDIA dispatch is covered by automated tests, but full model inference on
-NVIDIA hardware still needs to be verified on the deployment host; the development
-machine has an AMD GPU. Separate optional tools (Tesseract, Java and the isolated Marker
-environment) retain their own setup instructions below.
-
-### 1. Configure
-
-```bash
-cp .env.example .env        # Windows: Copy-Item .env.example .env
-```
-
-No API keys are needed for local parsing. For optional automatic judging, select
-**LlamaParse Agentic Plus** and start a run. The confirmation dialog asks for any missing
-LlamaParse and Mistral keys. Choose the region matching your LlamaParse account and click
-**Save API keys**, then type **OK** to confirm the external processing. Saving alone does
-not start a run or send documents. Keys are checked by the providers when a run uses them.
-
-Saved keys apply to the **whole installation**, including CPU runs, and survive backend
-restarts in `DATA_DIR/judging-keys.json` (`data/judging-keys.json` by default). This is a
-gitignored, server-side **plaintext** file, never returned by the API or stored in browser
-storage. Restrict access to the data directory; on Windows it inherits the directory's
-permissions, and on Linux the file is created with owner-only permissions. Persist the
-data volume when deploying containers. Keep a shared deployment behind authentication:
-users with access to the app can supply missing keys and use the installation's API credits.
-
-Alternatively, configure `LLAMA_CLOUD_API_KEY` and `MISTRAL` (or `MISTRAL_API_KEY`) in `.env`
-or the server environment. These take precedence over saved keys. For an EU LlamaParse key,
-set `LLAMA_CLOUD_BASE_URL=https://api.cloud.eu.llamaindex.ai`. Existing keys are never exposed
-or overwritten through the dialog; to replace a saved key, edit the server's key file or
-configure the replacement in the environment and restart the backend. Set `CORS_ORIGINS`
-to include the frontend's origin when deploying at a custom URL.
-
-### 2. Backend
-
-On Windows with **Smart App Control**, use an official, signed Python installation
-from Python.org. Unsigned uv-managed Python builds can be blocked by Windows
-([upstream issue](https://github.com/astral-sh/uv/issues/22869)). Create a fresh virtual
-environment from the signed interpreter, for example `py -3.13 -m venv backend/.venv`,
-before installing dependencies. Back up an existing environment before rebuilding it;
-changing Python minor versions requires reinstalling its packages. The AMD 7.13.0
-wheels support Python 3.13 on Windows.
-
-Install the dependencies and a PyTorch build that matches your hardware:
-
-```powershell
-./scripts/install-torch.ps1 -Flavor cuda           # NVIDIA
-./scripts/install-torch.ps1 -Flavor rocm-gfx1151   # AMD Ryzen AI Max / Radeon 8060S
-./scripts/install-torch.ps1 -Flavor cpu            # no GPU
-```
-
-```bash
-./scripts/install-torch.sh cuda   # or rocm-gfx1151, cpu, mac
-```
-
-Then start the API:
-
-```bash
-cd backend
-uv run --no-sync python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-`--no-sync` preserves the separately installed hardware-specific PyTorch build.
-Windows may also block native dependencies such as ROCm or PDFium even when Python
-itself is signed. The API can still serve saved outputs, originals and cached previews:
-an unloadable PyTorch runtime marks dependent models unavailable, and unavailable PDF
-rendering returns HTTP 503 when a fresh render is required. The server logs identify
-the dependency failure; the application does not change Windows security settings.
-
-The first run of each model downloads its weights from Hugging Face (1.7–4.5 GB per model,
-about 18 GB for all seven). At most `MAX_LOADED_MODELS` (default 2) stay in memory; the least
-recently used one is unloaded when another is needed.
-
-> Use `uv sync --extra local --inexact` if you re-sync. A plain `uv sync` removes the separately
-> installed PyTorch.
-
-### 3. Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open <http://localhost:3000>. The frontend proxies `/api/*` to the backend. Set `BACKEND_URL` if
-the backend isn't at `http://127.0.0.1:8000`.
-
-### Faster: serve the models with vLLM
-
-On a CUDA machine you can serve the models with vLLM, using the same settings ParseBench used,
-and point the arena at them. The arena then sends requests there instead of loading the
-weights itself:
-
-```bash
-vllm serve cloudraker/rakedoc-nano --served-model-name rakedoc-nano \
-  --max-model-len 8192 --gpu-memory-utilization 0.85 --max-num-seqs 24 \
-  --trust-remote-code --limit-mm-per-prompt '{"image":1}' --port 8001
-
-vllm serve aeddix-labs/aeddix-alpine-ocr --revision v0.1 --served-model-name aeddix-alpine-ocr \
-  --max-model-len 8192 --gpu-memory-utilization 0.85 --max-num-seqs 24 \
-  --trust-remote-code --limit-mm-per-prompt '{"image":1}' --port 8002
-
-vllm serve florin-inc/florin-parser-nano --served-model-name florin-parser-nano \
-  --max-model-len 8192 --gpu-memory-utilization 0.85 --max-num-seqs 24 \
-  --trust-remote-code --limit-mm-per-prompt '{"image":1}' --port 8003
-
-# vLLM 0.30 or later
-vllm serve lightonai/LightOnOCR-3-0.8B --served-model-name loocr-grounding \
-  --gpu-memory-utilization 0.85 --limit-mm-per-prompt '{"image": 1}' \
-  --max-model-len 24576 --port 8004
-
-vllm serve opendatalab/MinerU2.5-Pro-2605-1.2B \
-  --logits-processors mineru_vl_utils:MinerULogitsProcessor --port 8005
-```
-
-```dotenv
-RAKEDOC_NANO_ENDPOINT_URL=http://gpu-host:8001/v1
-AEDDIX_ALPINE_OCR_ENDPOINT_URL=http://gpu-host:8002/v1
-FLORIN_PARSER_NANO_ENDPOINT_URL=http://gpu-host:8003/v1
-LIGHTONOCR_3_0_8B_ENDPOINT_URL=http://gpu-host:8004/v1
-MINERU2_5_PRO_2605_ENDPOINT_URL=http://gpu-host:8005/v1
-```
-
-Infinity-Parser2-Flash needs its own serving setup; follow its model card, then set
-`INFINITY_PARSER2_FLASH_ENDPOINT_URL` (served model name
-`infly/Infinity-Parser2-Flash`).
-
-## Configuration
-
-Settings are environment variables (or entries in `.env`). Missing judging API keys can
-also be saved through the confirmation dialog as described above:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `LLAMA_CLOUD_API_KEY` | empty | Enables LlamaParse Agentic Plus |
-| `LLAMA_CLOUD_BASE_URL` | `https://api.cloud.llamaindex.ai` | EU: `https://api.cloud.eu.llamaindex.ai` |
-| `<MODEL>_ENDPOINT_URL` | empty | vLLM endpoint for one model, e.g. `RAKEDOC_NANO_ENDPOINT_URL`; empty = run locally. `<MODEL>` is the model id in capitals with `_` for other characters |
-| `<MODEL>_SERVED_MODEL` | see `.env.example` | Served model name on that endpoint |
-| `VLLM_API_KEY` | empty | Bearer token for those endpoints |
-| `LOCAL_INFERENCE` | `true` | Allow running models in the API process |
-| `LOCAL_DEVICE`, `LOCAL_DTYPE` | `auto` | Force `cuda`/`cpu` and `bfloat16`/`float16`/`float32` |
-| `LOCAL_MAX_BATCH` | `8` | Requests decoded together (KDL regions, MinerU blocks) |
-| `KEEP_MODELS_LOADED` | `true` | Keep weights in memory between runs |
-| `MAX_LOADED_MODELS` | `2` | Checkpoints kept in memory at once |
-| `MAX_UPLOAD_MB`, `MAX_PAGES_PER_EXPERIMENT` | `100`, `50` | Limits |
-| `DATA_DIR` | `data/` in the repo | Uploads, renders, results, SQLite |
-| `BACKEND_URL` (frontend) | `http://127.0.0.1:8000` | Where the Next.js server proxies `/api` |
-
-## API
-
-The frontend uses only this JSON API, so other clients can use it too:
-
-| Method & path | Purpose |
-| --- | --- |
-| `GET /api/health` | Status, LlamaParse configured, local accelerator, limits |
-| `GET /api/models` | Catalog with sizes, specialties and per-model availability (legacy benchmark metadata retained) |
-| `POST /api/documents` | Upload (`multipart/form-data`, field `file`) |
-| `POST /api/documents/sample` | Add the bundled sample report |
-| `POST /api/batches` | Start a batch: `{"documents": [{"document_id": "...", "pages": [1, 3]}], "models": ["pypdf"], "cpu_only": false}`; up to 12 unique pages |
-| `GET /api/batches`, `/api/batches/{id}` | Saved batches; detail includes per-document experiments and page-weighted model aggregates |
-| `POST /api/batches/{id}/rerun`, `DELETE /api/batches/{id}` | Rerun the same selection/mode, or delete a finished batch |
-| `GET /api/documents/{id}/file`, `/thumbnail`, `/pages/{n}` | Original, thumbnail, page render |
-| `POST /api/experiments` | Start: `{"document_id", "models": [...], "pages": "1-3,5"}` |
-| `GET /api/experiments`, `GET /api/experiments/{id}` | History; detail with progress and outputs |
-| `POST /api/experiments/{id}/rerun`, `DELETE /api/experiments/{id}` | Run again, delete |
-
-Interactive docs: <http://127.0.0.1:8000/docs>.
-
-## Development
-
-### Additional local library presets
-
-Seven independent options are available, with stable IDs:
-
-- **Marker Fast** (`marker_fast`): `marker-pdf==2.1.0`, `PdfConverter`,
-  `mode="fast"`, `disable_ocr=True`, `use_llm=False`. Reads embedded PDF text with
-  a roughly 20M layout detector. No OCR on scans, and no Surya OCR VLM is loaded.
-  The lightweight detector itself is provided by Surya's helper library.
-- **Marker Balanced** (`marker_balanced`): the same package, `mode="balanced"`,
-  `disable_ocr=False`, `force_ocr=False`, `use_llm=False`, Surya checkpoint
-  `datalab-to/surya-ocr-2.5` (roughly 689M plus auxiliaries). Uses the official
-  unquantized `surya-2.5.gguf` and multimodal projector through local llama.cpp.
-  Neither Marker preset uses cloud LLM postprocessing.
-- **OpenDataLoader Core** (`opendataloader_core`): `opendataloader-pdf==2.5.18`,
-  `hybrid="off"`. Java text/structure extraction, no neural model and no OCR.
-- **OpenDataLoader Docling** (`opendataloader_docling`): the package's `[hybrid]`
-  extra, `hybrid="docling-fast"`, `hybrid_mode="auto"`, `hybrid_fallback=False`.
-  The backend starts on loopback with CPU Docling, EasyOCR languages `de,en`,
-  automatic OCR and accurate TableFormer enabled. Formula enrichment and picture
-  descriptions are disabled. Automatic triage sends only pages that need it to
-  Docling; backend failures are surfaced instead of silently using Java output.
-- **docTR compact** (`doctr_compact`): `python-doctr==1.1.0`, detector
-  `db_mobilenet_v3_large`, recognizer `crnn_mobilenet_v3_small` (approximately 6.3M).
-- **docTR default** (`doctr_default`): detector `fast_base`, recognizer
-  `crnn_vgg16_bn` (approximately 26.4M at inference).
-- **docTR Large transformer** (`doctr_large_transformer`): detector `db_resnet50`,
-  recognizer `vitstr_base` (approximately 110.6M).
-
-All three docTR presets use `ocr_predictor(pretrained=True, detect_layout=False,
-detect_tables=False)` with automatic GPU selection (including AMD ROCm), four CPU
-threads for preprocessing, 200-DPI PDF images, float32 weights, and the library's
-remaining defaults. `LOCAL_DEVICE=cpu` explicitly selects CPU; `auto` uses CPU
-only when no supported GPU is available. They output plain text and word bounding boxes;
-table cells are not reconstructed. Marker exports Markdown/layout boxes;
-OpenDataLoader exports Markdown/JSON with normalized layout boxes. Selected page
-numbers, timings, exact preset configuration and package versions are saved with
-each result. Sizes exclude auxiliary components where noted.
-
-On Windows ROCm, docTR's batch-normalization and LSTM layers use PyTorch's native
-GPU kernels to work around MIOpen's missing `type_traits` HIPRTC compile error.
-Convolutions continue to use MIOpen. The original weights, float32 precision and
-architectures are preserved, and model tensors stay on the GPU. Saved run metadata
-records the actual device, ROCm/CUDA runtime and affected layer counts.
-
-Install the main local dependencies with `uv sync --extra local --inexact` in
-`backend`. Marker has a separate environment because its Pillow `<11` requirement
-conflicts with MinerU's Pillow `>=11` requirement:
-
-```powershell
-cd backend
-uv sync --extra local --inexact
-uv sync --project runtimes/marker
-.\.venv\Scripts\python.exe scripts/install-preset-tools.py
-```
-
-The last command installs checksum-verified portable Java 21 and llama.cpp Vulkan
-for Windows x64 under `data/runtimes`, without changing system PATH. On other
-platforms, install Java 11+ and `llama-server` yourself. `JAVA_CMD`,
-`LLAMA_CPP_BINARY` and `MARKER_PYTHON` can override executable locations. Model
-weights download on first use; documents stay local. Marker's isolated CPU
-PyTorch handles auxiliary models and llama.cpp handles the Balanced VLM. The
-existing main-environment CUDA/ROCm PyTorch is preserved by `--inexact`.
-
-Workers are cached separately by preset and stopped on eviction/server shutdown.
-An isolated Windows compatibility fix uses process handles instead of Surya
-0.23's POSIX signal-based liveness check when stopping its own servers.
-
-To test an individual preset without running samples or external API judging:
-
-```powershell
-.\.venv\Scripts\python.exe scripts/smoke_model.py samples/sample-report.pdf --model marker_fast --pages 1
-```
-
-### Checks
-
-```bash
-cd backend && uv run pytest && uv run ruff check app scripts tests
-cd frontend && npm run lint && npm run build
-```
-
-`backend/scripts/smoke_model.py` runs one model on a few pages from the command line (stop the API
-server first so only one model uses the GPU):
-
-```bash
-cd backend
-uv run python scripts/smoke_model.py samples/sample-report.pdf --model lightonocr-3-0.8b --pages 1
-```
-
-`backend/scripts/bench_local.py` measures prefill and decode speed.
-
-## Privacy
-
-Open models keep documents on the machine that runs the backend. When LlamaParse is selected,
-the full document is uploaded to LlamaIndex Cloud; page selection controls which pages are
-processed, not which parts of the file are uploaded.
-
-When `MISTRAL` (or `MISTRAL_API_KEY`) is configured and a completed LlamaParse reference is
-available, the candidate and reference **extracted text** are sent to Mistral for quality
-judging. Original files and page images are not sent to the judge.
-
-Starting or rerunning an experiment with LlamaParse selected opens a confirmation dialog
-explaining both transfers and the user's responsibility to check the document's sensitivity
-and permission to share it. The user must type `OK` before the run is submitted. Cancelling
-starts no run, and confirmation is requested again for each new attempt.
-
-## Quality judging
-
-The default judge is [Mistral Large 4](https://docs.mistral.ai/models/mistral-large), using
-medium reasoning effort and structured JSON responses. `JUDGE_MODEL` can override the model;
-`JUDGE_REASONING_EFFORT` supports `low`, `medium` and `high`. `JUDGE_TIMEOUT_S` defaults to
-180 seconds per request. The API key stays on the backend.
-
-Up to four page checks run concurrently across documents and models (`JUDGE_CONCURRENCY=4`).
-Temporary connection errors, HTTP 408/429/5xx responses and unreadable responses are retried
-with exponential backoff and jitter, respecting `Retry-After`. `JUDGE_REQUEST_ATTEMPTS=4`
-limits each request to four attempts. Invalid assessments are repaired up to twice;
-truncated assessments get a larger output allowance. Authentication and input errors
-are not retried. A failed page does not stop other pages from being judged.
-
-Each selected page is compared to the matching LlamaParse page for content, exact values,
-tables, structure, reading order and formulas. Equivalent Markdown/HTML and cosmetic
-differences are ignored. Findings include short source excerpts, which may combine
-separate passages. The backend validates the response format, without matching excerpts
-against the input text.
-The document verdict is the worst page's verdict:
-
-- **Excellent:** no supported discrepancies against the reference.
-- **Pass:** only minor transcription or structural issues, without changed meaning.
-- **Fail:** a material omission, incorrect critical value, broken association or other
-  major extraction error.
-
-The score is relative to LlamaParse, not a guarantee of correctness against the original.
-LlamaParse v2 can return page headers and footers separately from the body. The adapter
-includes these regions in the displayed and judged Markdown, avoids duplicating matching
-body edges, and retains the separate fields in run metadata. The judge must not treat
-candidate-only headers, footers or navigation as invented merely because the reference
-omits them; actual contradictions, repetition and extraction errors still count.
-An empty, failed or unusable reference produces an unavailable check, never a Fail score.
-API errors likewise remain distinct from extraction quality. Oversized pages are rejected
-without silently truncating the comparison.
-
-New runs are checked automatically after both outputs complete. Existing experiments have
-a **Judge outputs** action, backed by `POST /api/experiments/{id}/judge`. The action retries
-failed checks and skips already judged, unchanged outputs. Judging has its own background
-queue and does not affect OCR timings. Results persist in a separate SQLite table with
-the model, rubric version, input fingerprint and page findings; interrupted checks resume
-from completed pages on restart. Only explicitly queued checks resume, not all old experiments.
-New page assessments record their reasoning effort. Changing this setting keeps completed
-ratings; missing pages use the current effort when retried. The rubric remains the same.
-Existing references and ratings are not rewritten when the adapter or rubric changes.
-Ratings from an older rubric are shown as **Recheck needed** until explicitly rejudged.
-Using **Judge outputs** again applies the current rubric to saved text without rerunning OCR;
-recovering header/footer text absent from an old saved reference requires refreshing that reference.
-
-## Roadmap
-
-- Workspaces and authentication for multiple clients
+- **Two services:** a Next.js frontend and a FastAPI backend. Local methods run sequentially; model loading is measured separately from parsing.
+- **Separate quality checks:** up to four Mistral checks run concurrently, with retries. Judging time is excluded from OCR timings.
+- **Persistent results:** SQLite stores runs and assessments; files and model caches live in persistent storage. Partial extraction and missing judgments remain visible.
+- **One shared installation:** use one backend replica/worker. Add authentication and TLS before sharing it; separate user workspaces are not implemented.
+
+“Local” means the machine hosting the backend. Runtime labels distinguish **CPU,
+AMD ROCm, AMD Vulkan, NVIDIA CUDA**, configured remote servers, and the hosted API.
+
+## Further details
+
+- [Deployment & configuration](docs/deployment.md) — storage, API keys, image distribution, Kubernetes and runtime profiles.
+- [Model presets](docs/model-presets.md) — exact pipelines, output formats, hardware paths and limitations.
+- [Architecture & development](docs/architecture.md) — timing and judging rules, saved samples, API and developer checks.

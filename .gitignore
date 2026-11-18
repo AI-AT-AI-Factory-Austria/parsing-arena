@@ -8,6 +8,9 @@ judging-keys.json
 # Uploaded documents, rendered pages, results and the SQLite database
 data/
 
+# Generated blog posts, presentations and other local exports
+/exports/
+
 # Python
 .venv/
 __pycache__/
