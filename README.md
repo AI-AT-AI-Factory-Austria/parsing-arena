@@ -32,8 +32,8 @@
 Install [Docker with Compose](https://docs.docker.com/compose/install/), then:
 
 ```bash
-git clone https://github.com/yannikgaebel/ocr-arena.git
-cd ocr-arena
+git clone https://github.com/yannikgaebel/parsing-arena.git
+cd parsing-arena
 docker compose up --build -d
 ```
 
