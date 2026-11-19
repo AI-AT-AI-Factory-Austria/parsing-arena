@@ -6,9 +6,9 @@
   <p><a href="#run-it-locally">Get started</a> · <a href="#models">Models</a> · <a href="docs/deployment.md">Deployment</a> · <a href="docs/architecture.md">Technical guide</a></p>
 </div>
 
-![Original document beside Marker Balanced output, with page-level quality feedback](docs/images/comparison.png)
+![Original table sample beside OvisOCR3 output, with page-level quality feedback](docs/images/comparison.png)
 
-*Original and extraction side by side, with quality feedback. Example: NVIDIA FY2024 Sustainability Report.*
+*Original and extraction side by side, with quality feedback. Example: the FDA sample with a study comparison table.*
 
 - **A broad selection:** pypdf, tiny OCR networks, Docling, Marker and vision-language models.
 - **Your documents, page by page:** preview PDFs or images and select up to **12 unique pages across multiple documents**.
@@ -17,11 +17,11 @@
 - **Saved results:** reopen runs and prepared samples without repeating extraction. Local parsing needs no API keys.
 
 <details>
-<summary><strong>See the batch overview: coverage, timings and saved results</strong></summary>
+<summary><strong>See the batch overview: coverage, timings and quality scores</strong></summary>
 
-![Saved run overview comparing six local methods on a synthetic report](docs/images/batch-overview.png)
+![Saved batch overview showing parsing times, Excellent / Pass / Fail counts and pass rates across five pages](docs/images/batch-overview.png)
 
-*Every page counts equally in the batch overview. These are example runs; timings and assessments depend on the document, preset and hardware.*
+*Excerpt from a saved, judged batch: every page counts equally. Timings and assessments depend on the document, preset and hardware.*
 
 </details>
 
